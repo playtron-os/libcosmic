@@ -15,6 +15,13 @@ pub struct CornerRadii {
     pub radius_l: [f32; 4],
     /// extra large corner radii
     pub radius_xl: [f32; 4],
+    /// window corner radii (used by compositor for window decorations)
+    #[serde(default = "default_radius_window")]
+    pub radius_window: [f32; 4],
+}
+
+fn default_radius_window() -> [f32; 4] {
+    [22.0; 4]
 }
 
 impl Default for CornerRadii {
@@ -26,6 +33,7 @@ impl Default for CornerRadii {
             radius_m: [16.0; 4],
             radius_l: [32.0; 4],
             radius_xl: [160.0; 4],
+            radius_window: [22.0; 4],
         }
     }
 }
