@@ -656,6 +656,14 @@ impl Theme {
     #[must_use]
     #[allow(clippy::doc_markdown)]
     #[inline]
+    /// get @radius_window (window corner radius for compositor)
+    pub fn radius_window(&self) -> [f32; 4] {
+        self.corner_radii.radius_window
+    }
+
+    #[must_use]
+    #[allow(clippy::doc_markdown)]
+    #[inline]
     /// get @radius_m
     pub fn radius_m(&self) -> [f32; 4] {
         self.corner_radii.radius_m

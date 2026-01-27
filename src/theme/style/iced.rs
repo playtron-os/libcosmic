@@ -469,8 +469,8 @@ impl iced_container::Catalog for Theme {
     fn style(&self, class: &Self::Class<'_>) -> iced_container::Style {
         let cosmic = self.cosmic();
 
-        // Ensures visually aligned radii for content and window corners
-        let window_corner_radius = cosmic.radius_s().map(|x| if x < 4.0 { x } else { x + 4.0 });
+        // Use dedicated window radius from theme
+        let window_corner_radius = cosmic.radius_window();
 
         match class {
             Container::Transparent => iced_container::Style::default(),

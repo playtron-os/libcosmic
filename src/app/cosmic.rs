@@ -657,7 +657,7 @@ impl<T: Application> Cosmic<T> {
 
                     let theme = THEME.lock().unwrap();
                     let t = theme.cosmic();
-                    let radii = t.radius_s().map(|x| if x < 4.0 { x } else { x + 4.0 });
+                    let radii = t.radius_window();
                     let cur_rad = CornerRadius {
                         top_left: radii[0].round() as u32,
                         top_right: radii[1].round() as u32,
@@ -797,7 +797,7 @@ impl<T: Application> Cosmic<T> {
 
                             let t = cosmic_theme.cosmic();
 
-                            let radii = t.radius_s().map(|x| if x < 4.0 { x } else { x + 4.0 });
+                            let radii = t.radius_window();
                             let cur_rad = CornerRadius {
                                 top_left: radii[0].round() as u32,
                                 top_right: radii[1].round() as u32,
@@ -943,7 +943,7 @@ impl<T: Application> Cosmic<T> {
 
                                 let t = cosmic_theme.cosmic();
 
-                                let radii = t.radius_s().map(|x| if x < 4.0 { x } else { x + 4.0 });
+                                let radii = t.radius_window();
                                 let cur_rad = CornerRadius {
                                     top_left: radii[0].round() as u32,
                                     top_right: radii[1].round() as u32,
@@ -1219,7 +1219,7 @@ impl<T: Application> Cosmic<T> {
 
                     let theme = THEME.lock().unwrap();
                     let t = theme.cosmic();
-                    let radii = t.radius_s().map(|x| if x < 4.0 { x } else { x + 4.0 });
+                    let radii = t.radius_window();
                     let cur_rad = CornerRadius {
                         top_left: radii[0].round() as u32,
                         top_right: radii[1].round() as u32,
