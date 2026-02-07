@@ -140,10 +140,20 @@ impl Theme {
         Config::new(LIGHT_THEME_ID, Self::VERSION)
     }
 
-    #[inline]
-    /// get the built in light theme
+    /// Get the built-in light theme with customized defaults.
+    ///
+    /// This produces a clean, minimal light theme with pure white backgrounds,
+    /// generous window rounding, and subtle gray surfaces.
     pub fn light_default() -> Self {
-        LIGHT_PALETTE.clone().into()
+        let mut builder = ThemeBuilder::light()
+            .bg_color(Srgba::new(1.0, 1.0, 1.0, 1.0))
+            .primary_container_bg(Srgba::new(0.96, 0.96, 0.96, 1.0))
+            .corner_radii(CornerRadii {
+                radius_window: [16.0; 4],
+                ..CornerRadii::default()
+            });
+        builder.secondary_container_bg = Some(Srgba::new(0.93, 0.93, 0.93, 1.0));
+        builder.build()
     }
 
     #[inline]

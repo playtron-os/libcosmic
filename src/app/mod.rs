@@ -301,6 +301,11 @@ where
         None
     }
 
+    /// Returns an optional icon handle to display in the header bar before the title.
+    fn app_icon(&self) -> Option<crate::widget::icon::Handle> {
+        None
+    }
+
     /// Attaches elements to the start section of the header.
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
         Vec::new()
@@ -684,9 +689,18 @@ impl<App: Application> ApplicationExt for App {
                     border_padding,
                 ])
             }));
+        let content_inset = if maximized { 0 } else { 16 };
         let content: Element<_> = if content_container {
-            content_col
+            let inner: Element<_> = content_col
                 .apply(container)
+                .padding([7, 0, 0, 0])
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .class(crate::theme::Container::ContentArea)
+                .into();
+
+            container(inner)
+                .padding([8, content_inset, content_inset, content_inset])
                 .width(iced::Length::Fill)
                 .height(iced::Length::Fill)
                 .class(crate::theme::Container::WindowBackground)
@@ -700,10 +714,7 @@ impl<App: Application> ApplicationExt for App {
         let window_corner_radius = if sharp_corners {
             crate::theme::active().cosmic().radius_0()
         } else {
-            crate::theme::active()
-                .cosmic()
-                .radius_s()
-                .map(|x| if x < 4.0 { x } else { x + 4.0 })
+            crate::theme::active().cosmic().radius_window()
         };
 
         let view_column = crate::widget::column::with_capacity(2)
@@ -718,6 +729,10 @@ impl<App: Application> ApplicationExt for App {
                         .on_right_click(crate::Action::Cosmic(Action::ShowWindowMenu))
                         .on_double_click(crate::Action::Cosmic(Action::Maximize))
                         .is_condensed(is_condensed);
+
+                    if let Some(icon) = self.app_icon() {
+                        header = header.app_icon(icon);
+                    }
 
                     if self.nav_model().is_some() {
                         let toggle = crate::widget::nav_bar_toggle()
