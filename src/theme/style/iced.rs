@@ -389,6 +389,7 @@ pub enum Container<'a> {
     WindowBackground,
     Background,
     Card,
+    ContentArea,
     ContextDrawer,
     Custom(Box<dyn Fn(&Theme) -> iced_container::Style + 'a>),
     Dialog,
@@ -591,6 +592,18 @@ impl iced_container::Catalog for Theme {
                 border: Border {
                     radius: cosmic.corner_radii.radius_l.into(),
                     ..Default::default()
+                },
+                shadow: Shadow::default(),
+            },
+
+            Container::ContentArea => iced_container::Style {
+                icon_color: Some(Color::from(cosmic.background.on)),
+                text_color: Some(Color::from(cosmic.background.on)),
+                background: Some(iced::Background::Color(cosmic.background.base.into())),
+                border: Border {
+                    radius: cosmic.corner_radii.radius_s.into(),
+                    width: 1.0,
+                    color: cosmic.background.divider.into(),
                 },
                 shadow: Shadow::default(),
             },

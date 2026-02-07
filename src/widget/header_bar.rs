@@ -7,12 +7,13 @@ use apply::Apply;
 use derive_setters::Setters;
 use iced::Length;
 use iced_core::{Vector, Widget, widget::tree};
-use std::{borrow::Cow, cmp};
+use std::borrow::Cow;
 
 #[must_use]
 pub fn header_bar<'a, Message>() -> HeaderBar<'a, Message> {
     HeaderBar {
         title: Cow::Borrowed(""),
+        app_icon: None,
         on_close: None,
         on_drag: None,
         on_maximize: None,
@@ -37,6 +38,10 @@ pub struct HeaderBar<'a, Message> {
     /// Defines the title of the window
     #[setters(skip)]
     title: Cow<'a, str>,
+
+    /// Optional app icon displayed before the title
+    #[setters(skip)]
+    app_icon: Option<widget::icon::Handle>,
 
     /// A message emitted when the close button is pressed.
     #[setters(strip_option)]
@@ -103,6 +108,13 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
     #[must_use]
     pub fn title(mut self, title: impl Into<Cow<'a, str>> + 'a) -> Self {
         self.title = title.into();
+        self
+    }
+
+    /// Sets the app icon displayed before the title
+    #[must_use]
+    pub fn app_icon(mut self, icon: widget::icon::Handle) -> Self {
+        self.app_icon = Some(icon);
         self
     }
 
@@ -314,7 +326,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         } = theme::spacing();
 
         // Take ownership of the regions to be packed.
-        let start = std::mem::take(&mut self.start);
+        let mut start = std::mem::take(&mut self.start);
         let center = std::mem::take(&mut self.center);
         let mut end = std::mem::take(&mut self.end);
 
@@ -324,20 +336,46 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         // Also packs the window controls at the very end.
         end.push(self.window_controls());
 
+        // Build the title element (with optional app icon) and place it in the start region.
+        if !self.title.is_empty() && !self.is_condensed {
+            let mut title = Cow::default();
+            std::mem::swap(&mut title, &mut self.title);
+
+            let title_text: Element<'a, Message> =
+                widget::text::heading(title).into();
+
+            let title_element: Element<'a, Message> = if let Some(icon_handle) = self.app_icon.take() {
+                widget::row::with_capacity(2)
+                    .push(
+                        widget::icon::icon(icon_handle)
+                            .size(20),
+                    )
+                    .push(title_text)
+                    .spacing(space_xxs)
+                    .align_y(iced::Alignment::Center)
+                    .into()
+            } else {
+                title_text
+            };
+
+            start.push(title_element);
+        }
+
         // Center content depending on window border
+        // Non-maximized windows use larger horizontal padding to clear rounded corners.
         let padding = match self.density.unwrap_or_else(crate::config::header_size) {
             Density::Compact => {
                 if self.maximized {
                     [4, 8, 4, 8]
                 } else {
-                    [3, 7, 4, 7]
+                    [3, 16, 4, 16]
                 }
             }
             _ => {
                 if self.maximized {
                     [8, 8, 8, 8]
                 } else {
-                    [7, 7, 8, 7]
+                    [7, 16, 8, 16]
                 }
             }
         };
@@ -359,7 +397,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             .round() as u16)
             .max(1);
         let (left_portion, right_portion) =
-            if center.is_empty() && (self.title.is_empty() || self.is_condensed) {
+            if center.is_empty() {
                 let left_to_right_ratio = left_len as f32 / right_len.max(1) as f32;
                 let right_to_left_ratio = right_len as f32 / left_len.max(1) as f32;
                 if right_to_left_ratio > 2. || left_len < 1 {
@@ -372,10 +410,9 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             } else {
                 (portion, portion)
             };
-        let title_portion = cmp::max(left_portion, right_portion) * 2;
         // Creates the headerbar widget.
         let mut widget = widget::row::with_capacity(3)
-            // If elements exist in the start region, append them here.
+            // Start region: includes app icon + title + user start elements.
             .push(
                 widget::row::with_children(start)
                     .spacing(space_xxxs)
@@ -384,8 +421,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     .align_x(iced::Alignment::Start)
                     .width(Length::FillPortion(left_portion)),
             )
-            // If elements exist in the center region, use them here.
-            // This will otherwise use the title as a widget if a title was defined.
+            // Center region: only explicit center elements.
             .push_maybe(if !center.is_empty() {
                 Some(
                     widget::row::with_children(center)
@@ -395,10 +431,8 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                         .center_x(Length::Fill)
                         .into(),
                 )
-            } else if !self.title.is_empty() && !self.is_condensed {
-                Some(self.title_widget(title_portion))
             } else {
-                None
+                None::<Element<'a, Message>>
             })
             .push(
                 widget::row::with_children(end)
@@ -440,22 +474,17 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         widget.into()
     }
 
-    fn title_widget(&mut self, title_portion: u16) -> Element<'a, Message> {
-        let mut title = Cow::default();
-        std::mem::swap(&mut title, &mut self.title);
-
-        widget::text::heading(title)
-            .apply(widget::container)
-            .center(Length::FillPortion(title_portion))
-            .into()
-    }
-
     /// Creates the widget for window controls.
     fn window_controls(&mut self) -> Element<'a, Message> {
+        const ICON_MINIMIZE: &[u8] = include_bytes!("../../res/icons/window-minimize.svg");
+        const ICON_MAXIMIZE: &[u8] = include_bytes!("../../res/icons/window-maximize.svg");
+        const ICON_RESTORE: &[u8] = include_bytes!("../../res/icons/window-restore.svg");
+        const ICON_CLOSE: &[u8] = include_bytes!("../../res/icons/window-close.svg");
+
         macro_rules! icon {
-            ($name:expr, $size:expr, $on_press:expr) => {{
+            ($svg_bytes:expr, $size:expr, $on_press:expr) => {{
                 let icon = {
-                    widget::icon::from_name($name)
+                    widget::icon::from_svg_bytes($svg_bytes)
                         .apply(widget::button::icon)
                         .padding(8)
                 };
@@ -471,19 +500,19 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             .push_maybe(
                 self.on_minimize
                     .take()
-                    .map(|m: Message| icon!("window-minimize-symbolic", 16, m)),
+                    .map(|m: Message| icon!(ICON_MINIMIZE, 16, m)),
             )
             .push_maybe(self.on_maximize.take().map(|m| {
                 if self.maximized {
-                    icon!("window-restore-symbolic", 16, m)
+                    icon!(ICON_RESTORE, 16, m)
                 } else {
-                    icon!("window-maximize-symbolic", 16, m)
+                    icon!(ICON_MAXIMIZE, 16, m)
                 }
             }))
             .push_maybe(
                 self.on_close
                     .take()
-                    .map(|m| icon!("window-close-symbolic", 16, m)),
+                    .map(|m| icon!(ICON_CLOSE, 16, m)),
             )
             .spacing(theme::spacing().space_xxs)
             .apply(widget::container)
