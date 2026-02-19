@@ -321,6 +321,11 @@ where
         Vec::new()
     }
 
+    /// Whether to show the nav bar toggle button in the header.
+    fn show_nav_bar_toggle(&self) -> bool {
+        true
+    }
+
     /// Allows overriding the default nav bar widget.
     fn nav_bar(&self) -> Option<Element<'_, crate::Action<Self::Message>>> {
         if !self.core().nav_bar_active() {
@@ -734,7 +739,7 @@ impl<App: Application> ApplicationExt for App {
                         header = header.app_icon(icon);
                     }
 
-                    if self.nav_model().is_some() {
+                    if self.nav_model().is_some() && self.show_nav_bar_toggle() {
                         let toggle = crate::widget::nav_bar_toggle()
                             .active(core.nav_bar_active())
                             .selected(focused)

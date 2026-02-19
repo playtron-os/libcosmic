@@ -5,7 +5,8 @@ use crate::cosmic_theme::{Density, Spacing};
 use crate::{Element, theme, widget};
 use apply::Apply;
 use derive_setters::Setters;
-use iced::Length;
+use iced::{Border, Color, Length};
+use iced_core::font::Weight;
 use iced_core::{Vector, Widget, widget::tree};
 use std::borrow::Cow;
 
@@ -30,6 +31,7 @@ pub fn header_bar<'a, Message>() -> HeaderBar<'a, Message> {
         on_double_click: None,
         is_condensed: false,
         transparent: false,
+        corner_radius: None,
     }
 }
 
@@ -101,6 +103,11 @@ pub struct HeaderBar<'a, Message> {
 
     /// Whether the headerbar should be transparent
     transparent: bool,
+
+    /// Explicit corner radius [TL, TR, BR, BL] from the compositor.
+    /// When set, overrides the theme's radius_window() for SSD headers.
+    #[setters(strip_option)]
+    corner_radius: Option<[f32; 4]>,
 }
 
 impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
@@ -341,22 +348,39 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             let mut title = Cow::default();
             std::mem::swap(&mut title, &mut self.title);
 
-            let title_text: Element<'a, Message> =
-                widget::text::heading(title).into();
-
-            let title_element: Element<'a, Message> = if let Some(icon_handle) = self.app_icon.take() {
-                widget::row::with_capacity(2)
-                    .push(
-                        widget::icon::icon(icon_handle)
-                            .size(20),
-                    )
-                    .push(title_text)
-                    .spacing(space_xxs)
-                    .align_y(iced::Alignment::Center)
+            // SSD uses custom font: 15px, Inter (interface font), weight 500, color #474747
+            let title_text: Element<'a, Message> = if self.is_ssd {
+                let medium_font = iced::Font {
+                    weight: Weight::Medium,
+                    ..crate::font::default()
+                };
+                widget::text(title)
+                    .size(15.0)
+                    .font(medium_font)
+                    .class(Color::from_rgb8(0x1B, 0x1B, 0x1B))
                     .into()
             } else {
-                title_text
+                widget::text::title3(title).into()
             };
+
+            // SSD icon: 18px, color #1B1B1B; gap 8px
+            let title_element: Element<'a, Message> =
+                if let Some(icon_handle) = self.app_icon.take() {
+                    let (icon_size, icon_gap) = if self.is_ssd {
+                        (18, 8)
+                    } else {
+                        (24, space_xxs)
+                    };
+                    let icon_widget = widget::icon::icon(icon_handle).size(icon_size);
+                    widget::row::with_capacity(2)
+                        .push(icon_widget)
+                        .push(title_text)
+                        .spacing(icon_gap)
+                        .align_y(iced::Alignment::Center)
+                        .into()
+                } else {
+                    title_text
+                };
 
             start.push(title_element);
         }
@@ -396,22 +420,32 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             / center.len().max(1) as f32)
             .round() as u16)
             .max(1);
-        let (left_portion, right_portion) =
-            if center.is_empty() {
-                let left_to_right_ratio = left_len as f32 / right_len.max(1) as f32;
-                let right_to_left_ratio = right_len as f32 / left_len.max(1) as f32;
-                if right_to_left_ratio > 2. || left_len < 1 {
-                    (1, 2)
-                } else if left_to_right_ratio > 2. || right_len < 1 {
-                    (2, 1)
-                } else {
-                    (left_len as u16, (right_len + window_control_cnt) as u16)
-                }
+        let (left_portion, right_portion) = if center.is_empty() {
+            let left_to_right_ratio = left_len as f32 / right_len.max(1) as f32;
+            let right_to_left_ratio = right_len as f32 / left_len.max(1) as f32;
+            if right_to_left_ratio > 2. || left_len < 1 {
+                (1, 2)
+            } else if left_to_right_ratio > 2. || right_len < 1 {
+                (2, 1)
             } else {
-                (portion, portion)
-            };
+                (left_len as u16, (right_len + window_control_cnt) as u16)
+            }
+        } else {
+            (portion, portion)
+        };
+
+        // SSD uses fixed height 54px with 12px padding; non-SSD uses computed height
+        let (header_height, header_padding) = if self.is_ssd {
+            (Length::Fixed(54.0), [11, 12, 11, 12])
+        } else {
+            (
+                Length::Fixed(44.0 + padding[0] as f32 + padding[2] as f32),
+                if self.is_ssd { [0, 8, 0, 8] } else { padding },
+            )
+        };
+
         // Creates the headerbar widget.
-        let mut widget = widget::row::with_capacity(3)
+        let widget = widget::row::with_capacity(3)
             // Start region: includes app icon + title + user start elements.
             .push(
                 widget::row::with_children(start)
@@ -419,7 +453,12 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     .align_y(iced::Alignment::Center)
                     .apply(widget::container)
                     .align_x(iced::Alignment::Start)
-                    .width(Length::FillPortion(left_portion)),
+                    // SSD: title fills all remaining space; non-SSD: use portion ratio
+                    .width(if self.is_ssd {
+                        Length::Fill
+                    } else {
+                        Length::FillPortion(left_portion)
+                    }),
             )
             // Center region: only explicit center elements.
             .push_maybe(if !center.is_empty() {
@@ -440,20 +479,79 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     .align_y(iced::Alignment::Center)
                     .apply(widget::container)
                     .align_x(iced::Alignment::End)
-                    .width(Length::FillPortion(right_portion)),
+                    // SSD: buttons shrink to fit; non-SSD: use portion ratio
+                    .width(if self.is_ssd {
+                        Length::Shrink
+                    } else {
+                        Length::FillPortion(right_portion)
+                    }),
             )
             .align_y(iced::Alignment::Center)
-            .height(Length::Fixed(32.0 + padding[0] as f32 + padding[2] as f32))
-            .padding(if self.is_ssd { [0, 8, 0, 8] } else { padding })
+            .height(header_height)
+            .padding(header_padding)
             .spacing(8)
             .apply(widget::container)
-            .class(crate::theme::Container::HeaderBar {
-                focused: self.focused,
-                sharp_corners: self.sharp_corners,
-                transparent: self.transparent,
+            .class(if self.is_ssd {
+                // SSD: custom container with white background and top corner radii
+                let sharp = self.sharp_corners;
+                let explicit_radius = self.corner_radius;
+                crate::theme::Container::custom(move |theme| {
+                    let cosmic = theme.cosmic();
+                    let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
+                    iced_widget::container::Style {
+                        icon_color: Some(Color::from(cosmic.background.on)),
+                        text_color: Some(Color::from(cosmic.background.on)),
+                        background: Some(iced::Background::Color(Color::from_rgba8(
+                            255, 255, 255, 0.99,
+                        ))),
+                        border: Border {
+                            radius: [
+                                if sharp { 0.0 } else { window_radius[0] },
+                                if sharp { 0.0 } else { window_radius[1] },
+                                0.0,
+                                0.0,
+                            ]
+                            .into(),
+                            ..Default::default()
+                        },
+                        shadow: Default::default(),
+                    }
+                })
+            } else {
+                crate::theme::Container::HeaderBar {
+                    focused: self.focused,
+                    sharp_corners: self.sharp_corners,
+                    transparent: self.transparent,
+                }
             })
-            .center_y(Length::Shrink)
-            .apply(widget::mouse_area);
+            .center_y(Length::Shrink);
+
+        // SSD: add 1px horizontal rule below header with color #F0F0F1
+        let widget = if self.is_ssd {
+            use iced::widget::{horizontal_rule, rule};
+            widget::column::with_capacity(2)
+                .push(widget)
+                .push(
+                    horizontal_rule(1).class(crate::theme::Rule::Custom(Box::new(
+                        |_: &crate::Theme| rule::Style {
+                            color: Color::from_rgba8(240, 240, 241, 1.0),
+                            width: 1,
+                            radius: 0.0.into(),
+                            fill_mode: rule::FillMode::Full,
+                        },
+                    ))),
+                )
+                .apply(widget::mouse_area)
+        } else {
+            widget.apply(widget::mouse_area)
+        };
+
+        let mut widget = widget;
+
+        // SSD: show grab cursor over header (buttons override with pointer)
+        if self.is_ssd {
+            widget = widget.interaction(iced_core::mouse::Interaction::Grab);
+        }
 
         // Assigns a message to emit when the headerbar is dragged.
         if let Some(message) = self.on_drag.clone() {
@@ -481,20 +579,45 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         const ICON_RESTORE: &[u8] = include_bytes!("../../res/icons/window-restore.svg");
         const ICON_CLOSE: &[u8] = include_bytes!("../../res/icons/window-close.svg");
 
+        // SSD uses custom styling: fill_strong bg, space_xs padding, 2px gap
+        let is_ssd = self.is_ssd;
+
         macro_rules! icon {
             ($svg_bytes:expr, $size:expr, $on_press:expr) => {{
-                let icon = {
+                let padding = if is_ssd { [6, 6] } else { [8, 8] };
+                let result: Element<'a, Message> = if is_ssd {
+                    // SSD: create icon widget with dark tint, wrap in custom button
+                    let icon_w = widget::icon::icon(widget::icon::from_svg_bytes($svg_bytes))
+                        .size($size)
+                        .class(crate::theme::Svg::custom(|_| iced::widget::svg::Style {
+                            color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                        }));
+                    widget::button::custom(icon_w)
+                        .padding(padding)
+                        .class(crate::theme::Button::HeaderBar)
+                        .selected(self.focused)
+                        .on_press($on_press)
+                        .into()
+                } else {
                     widget::icon::from_svg_bytes($svg_bytes)
                         .apply(widget::button::icon)
-                        .padding(8)
+                        .padding(padding)
+                        .class(crate::theme::Button::HeaderBar)
+                        .selected(self.focused)
+                        .icon_size($size)
+                        .on_press($on_press)
+                        .into()
                 };
-
-                icon.class(crate::theme::Button::HeaderBar)
-                    .selected(self.focused)
-                    .icon_size($size)
-                    .on_press($on_press)
+                result
             }};
         }
+
+        // SSD: 2px gap between icons; non-SSD: space_xxs
+        let icon_spacing = if self.is_ssd {
+            2
+        } else {
+            theme::spacing().space_xxs
+        };
 
         widget::row::with_capacity(3)
             .push_maybe(
@@ -509,13 +632,36 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     icon!(ICON_MAXIMIZE, 16, m)
                 }
             }))
-            .push_maybe(
-                self.on_close
-                    .take()
-                    .map(|m| icon!(ICON_CLOSE, 16, m)),
-            )
-            .spacing(theme::spacing().space_xxs)
+            .push_maybe(self.on_close.take().map(|m| icon!(ICON_CLOSE, 16, m)))
+            .spacing(icon_spacing)
             .apply(widget::container)
+            .class(crate::theme::Container::custom(move |theme| {
+                let cosmic = theme.cosmic();
+                // SSD uses white at 80% opacity; non-SSD uses component base
+                let background = if is_ssd {
+                    Color::from_rgba8(0xFF, 0xFF, 0xFF, 0.80)
+                } else {
+                    Color::from(cosmic.background.component.base)
+                };
+                iced_widget::container::Style {
+                    background: Some(iced::Background::Color(background)),
+                    border: Border {
+                        radius: cosmic.corner_radii.radius_xl.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            }))
+            // SSD: 8px horizontal, 2px vertical; non-SSD: [4, 8]
+            .padding(if self.is_ssd { [2, 8] } else { [4, 8] })
+            .center_y(Length::Fill)
+            // SSD: 18px left margin so title never gets too close
+            .apply(widget::container)
+            .padding(if self.is_ssd {
+                iced::Padding::from([0, 0, 0, 18])
+            } else {
+                iced::Padding::ZERO
+            })
             .center_y(Length::Fill)
             .into()
     }
