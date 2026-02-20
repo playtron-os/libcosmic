@@ -158,7 +158,7 @@ phf = { version = "0.13.1", features = ["macros"] }
 
 [dependencies.icetron_assets]
 git = "ssh://git@bitbucket.org/playtron-one/icetron.git"
-rev = "a40c757"
+rev = "a1bf042"
 
 [dependencies.cosmic-theme]
 path = "cosmic-theme"

@@ -363,7 +363,8 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 widget::text::title3(title).into()
             };
 
-            // SSD icon: 18px, color #1B1B1B; gap 8px
+            // SSD icon: request high-res source (128px lookup in resolve_app_icon),
+            // display at 18px with Contain to preserve aspect ratio.
             let title_element: Element<'a, Message> =
                 if let Some(icon_handle) = self.app_icon.take() {
                     let (icon_size, icon_gap) = if self.is_ssd {
@@ -371,7 +372,13 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     } else {
                         (24, space_xxs)
                     };
-                    let icon_widget = widget::icon::icon(icon_handle).size(icon_size);
+                    let icon_widget = if self.is_ssd {
+                        widget::icon::icon(icon_handle)
+                            .size(icon_size)
+                            .content_fit(iced::ContentFit::Contain)
+                    } else {
+                        widget::icon::icon(icon_handle).size(icon_size)
+                    };
                     widget::row::with_capacity(2)
                         .push(icon_widget)
                         .push(title_text)
