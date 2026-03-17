@@ -850,6 +850,10 @@ const EMBEDDED_FONTS: &[&[u8]] = &[
     include_bytes!("../../res/open-sans/OpenSans-Semibold.ttf"),
     include_bytes!("../../res/open-sans/OpenSans-Bold.ttf"),
     include_bytes!("../../res/open-sans/OpenSans-ExtraBold.ttf"),
+    include_bytes!("../../res/inter/Inter-Regular.ttf"),
+    include_bytes!("../../res/inter/Inter-Medium.ttf"),
+    include_bytes!("../../res/inter/Inter-SemiBold.ttf"),
+    include_bytes!("../../res/inter/Inter-Bold.ttf"),
     include_bytes!("../../res/noto/NotoSansMono-Regular.ttf"),
     include_bytes!("../../res/noto/NotoSansMono-Bold.ttf"),
 ];

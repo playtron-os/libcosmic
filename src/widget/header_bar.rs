@@ -348,15 +348,12 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             let mut title = Cow::default();
             std::mem::swap(&mut title, &mut self.title);
 
-            // SSD uses custom font: 15px, Inter (interface font), weight 500, color #474747
+            // SSD uses icetron headline style: 15px/20px, Medium weight
             let title_text: Element<'a, Message> = if self.is_ssd {
-                let medium_font = iced::Font {
-                    weight: Weight::Medium,
-                    ..crate::font::default()
-                };
                 widget::text(title)
                     .size(15.0)
-                    .font(medium_font)
+                    .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(20.0)))
+                    .font(crate::font::medium())
                     .class(Color::from_rgb8(0x1B, 0x1B, 0x1B))
                     .into()
             } else {

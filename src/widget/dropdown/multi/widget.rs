@@ -279,6 +279,7 @@ pub fn layout(
                     vertical_alignment: alignment::Vertical::Top,
                     shaping: text::Shaping::Advanced,
                     wrapping: text::Wrapping::default(),
+                    letter_spacing: None,
                 });
                 paragraph.min_width().round()
             };
@@ -423,6 +424,7 @@ pub fn overlay<'a, S: AsRef<str>, Message: 'a, Item: Clone + PartialEq + 'static
                         vertical_alignment: alignment::Vertical::Top,
                         shaping: text::Shaping::Advanced,
                         wrapping: text::Wrapping::default(),
+                        letter_spacing: None,
                     });
                     paragraph.min_width().round()
                 };
@@ -555,6 +557,7 @@ pub fn draw<'a, S, Item: Clone + PartialEq + 'static>(
                 vertical_alignment: alignment::Vertical::Center,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::default(),
+                letter_spacing: None,
             },
             bounds.position(),
             style.text_color,
