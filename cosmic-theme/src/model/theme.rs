@@ -1041,7 +1041,7 @@ impl ThemeBuilder {
         let bg = if let Some(bg_color) = bg_color {
             bg_color
         } else {
-            p_ref.gray_1
+            p_ref.neutral_0
         };
 
         let step_array = steps(bg, NonZeroUsize::new(100).unwrap());
