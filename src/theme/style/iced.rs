@@ -715,9 +715,9 @@ impl slider::Catalog for Theme {
 
                     handle: slider::Handle {
                         shape: slider::HandleShape::Circle {
-                            radius: 9.0,
+                            radius: 10.0,
                         },
-                        border_color: Color::from_rgba8(0, 0, 0, 0.12),
+                        border_color: Color::from_rgb8(200, 200, 200),
                         border_width: 1.0,
                         background: Background::Color(Color::WHITE),
                         shadow: Shadow {
@@ -739,10 +739,10 @@ impl slider::Catalog for Theme {
             slider::Status::Hovered => match class {
                 Slider::Standard => {
                     appearance.handle.shape = slider::HandleShape::Circle {
-                        radius: 11.0,
+                        radius: 12.0,
                     };
                     appearance.handle.border_width = 1.0;
-                    appearance.handle.border_color = Color::from_rgba8(0, 0, 0, 0.12);
+                    appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
                     appearance.handle.shadow = Shadow {
                         color: Color::from_rgba8(0, 0, 0, 0.12),
                         offset: Vector::new(0.0, 1.0),
@@ -755,10 +755,10 @@ impl slider::Catalog for Theme {
             slider::Status::Dragged => match class {
                 Slider::Standard => {
                     appearance.handle.shape = slider::HandleShape::Circle {
-                        radius: 11.0,
+                        radius: 12.0,
                     };
                     appearance.handle.border_width = 1.0;
-                    appearance.handle.border_color = Color::from_rgba8(0, 0, 0, 0.12);
+                    appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
                     appearance.handle.shadow = Shadow {
                         color: Color::from_rgba8(0, 0, 0, 0.12),
                         offset: Vector::new(0.0, 1.0),

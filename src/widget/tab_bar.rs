@@ -8,6 +8,7 @@
 use super::segmented_button::{
     self, HorizontalSegmentedButton, Model, SegmentedButton, Selectable, VerticalSegmentedButton,
 };
+use iced::Length;
 
 /// A collection of tabs for developing a tabbed interface.
 ///
@@ -25,9 +26,11 @@ where
 
     segmented_button::horizontal(model)
         .minimum_button_width(76)
-        .maximum_button_width(250)
-        .button_height(44)
+        .maximum_button_width(200)
+        .button_height(32)
         .button_padding([space_s, space_xs, space_s, space_xs])
+        .font_size(13.0)
+        .width(Length::Shrink)
         .style(crate::theme::SegmentedButton::TabBar)
 }
 
@@ -47,8 +50,10 @@ where
 
     SegmentedButton::new(model)
         .minimum_button_width(76)
-        .maximum_button_width(250)
-        .button_height(44)
+        .maximum_button_width(200)
+        .button_height(32)
         .button_padding([space_s, space_xs, space_s, space_xs])
+        .font_size(13.0)
+        .width(Length::Shrink)
         .style(crate::theme::SegmentedButton::TabBar)
 }
