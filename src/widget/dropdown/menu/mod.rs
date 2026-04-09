@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex};
 
 pub use appearance::{Appearance, StyleSheet};
 
-use crate::surface;
 use crate::widget::{Container, RcWrapper, icon};
 use iced_core::event::{self, Event};
 use iced_core::layout::{self, Layout};
@@ -16,7 +15,7 @@ use iced_core::text::{self, Text};
 use iced_core::widget::Tree;
 use iced_core::{
     Border, Clipboard, Element, Length, Padding, Pixels, Point, Rectangle, Renderer, Shadow, Shell,
-    Size, Vector, Widget, alignment, mouse, overlay, renderer, svg, touch,
+    Size, Vector, Widget, alignment, mouse, overlay, renderer, touch,
 };
 use iced_widget::scrollable::Scrollable;
 
@@ -589,44 +588,7 @@ where
 
             let hovered_guard = self.hovered_option.lock().unwrap();
 
-            let (color, font) = if self.selected_option == Some(i) {
-                let item_x = bounds.x + appearance.border_width;
-                let item_width = appearance.border_width.mul_add(-2.0, bounds.width);
-
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: Rectangle {
-                            x: item_x,
-                            width: item_width,
-                            ..bounds
-                        },
-                        border: Border {
-                            radius: appearance.border_radius,
-                            ..Default::default()
-                        },
-                        shadow: Shadow::default(),
-                    },
-                    appearance.selected_background,
-                );
-
-                let svg_handle =
-                    iced_core::Svg::new(crate::widget::common::object_select().clone())
-                        .color(appearance.selected_text_color)
-                        .border_radius(appearance.border_radius);
-
-                svg::Renderer::draw_svg(
-                    renderer,
-                    svg_handle,
-                    Rectangle {
-                        x: item_x + item_width - 16.0 - 8.0,
-                        y: bounds.y + (bounds.height / 2.0 - 8.0),
-                        width: 16.0,
-                        height: 16.0,
-                    },
-                );
-
-                (appearance.selected_text_color, crate::font::semibold())
-            } else if *hovered_guard == Some(i) {
+            let (color, font) = if *hovered_guard == Some(i) {
                 let item_x = bounds.x + appearance.border_width;
                 let item_width = appearance.border_width.mul_add(-2.0, bounds.width);
 

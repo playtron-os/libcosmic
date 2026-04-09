@@ -124,9 +124,11 @@ impl ResponsiveMenuBar {
                 id_container(
                     menu::bar(vec![menu::Tree::<_>::with_children(
                         Element::from(
-                            button::icon(icon::from_name("open-menu-symbolic"))
-                                .padding([4, 12])
-                                .class(crate::theme::Button::MenuRoot),
+                            button::icon(icon::from_svg_bytes(
+                                icetron_assets::icons::system::MENU_LINE,
+                            ))
+                            .padding([4, 12])
+                            .class(crate::theme::Button::MenuRoot),
                         ),
                         menu::items(
                             key_binds,

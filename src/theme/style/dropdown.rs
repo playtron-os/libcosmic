@@ -3,26 +3,27 @@
 
 use crate::Theme;
 use crate::widget::dropdown;
-use iced::{Background, Color};
+use iced::Background;
 
 impl dropdown::menu::StyleSheet for Theme {
     type Style = ();
 
     fn appearance(&self, _style: &Self::Style) -> dropdown::menu::Appearance {
         let cosmic = self.cosmic();
+        let text_color = cosmic.on_bg_color().into();
 
         dropdown::menu::Appearance {
-            text_color: cosmic.on_bg_color().into(),
+            text_color,
             background: Background::Color(cosmic.background.component.base.into()),
             border_width: 0.0,
             border_radius: cosmic.corner_radii.radius_m.into(),
-            border_color: Color::TRANSPARENT,
+            border_color: iced::Color::TRANSPARENT,
 
-            hovered_text_color: cosmic.on_bg_color().into(),
-            hovered_background: Background::Color(cosmic.primary.component.hover.into()),
+            hovered_text_color: text_color,
+            hovered_background: Background::Color(iced::Color::from_rgb8(230, 230, 230)),
 
-            selected_text_color: cosmic.accent_text_color().into(),
-            selected_background: Background::Color(cosmic.primary.component.hover.into()),
+            selected_text_color: text_color,
+            selected_background: Background::Color(iced::Color::TRANSPARENT),
 
             description_color: cosmic.primary.component.on_disabled.into(),
         }

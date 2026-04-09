@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0 AND MIT
 
 use super::menu::{self, Menu};
-use crate::widget::icon;
 use derive_setters::Setters;
 use iced_core::event::{self, Event};
 use iced_core::text::{self, Paragraph, Text};
@@ -229,10 +228,9 @@ impl<Item: Clone + PartialEq + 'static> State<Item> {
     /// Creates a new [`State`] for a [`Dropdown`].
     pub fn new() -> Self {
         Self {
-            icon: match icon::from_name("pan-down-symbolic").size(16).handle().data {
-                icon::Data::Svg(handle) => Some(handle),
-                icon::Data::Image(_) => None,
-            },
+            icon: Some(iced_core::svg::Handle::from_memory(
+                icetron_assets::icons::system::ARROW_DOWN_S_LINE,
+            )),
             menu: menu::State::default(),
             keyboard_modifiers: keyboard::Modifiers::default(),
             is_open: false,
@@ -522,7 +520,7 @@ pub fn draw<'a, S, Item: Clone + PartialEq + 'static>(
     );
 
     if let Some(handle) = state.icon.as_ref() {
-        let svg_handle = iced_core::Svg::new(handle.clone()).color(style.text_color);
+        let svg_handle = iced_core::Svg::new(handle.clone()).color(style.handle_color);
         svg::Renderer::draw_svg(
             renderer,
             svg_handle,

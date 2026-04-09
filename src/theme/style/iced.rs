@@ -599,11 +599,11 @@ impl iced_container::Catalog for Theme {
             Container::ContentArea => iced_container::Style {
                 icon_color: Some(Color::from(cosmic.background.on)),
                 text_color: Some(Color::from(cosmic.background.on)),
-                background: Some(iced::Background::Color(cosmic.background.base.into())),
+                background: Some(iced::Background::Color(Color::from_rgb8(245, 245, 245))),
                 border: Border {
-                    radius: cosmic.corner_radii.radius_s.into(),
-                    width: 1.0,
-                    color: cosmic.background.divider.into(),
+                    radius: [0.0; 4].into(),
+                    width: 0.0,
+                    color: Color::TRANSPARENT,
                 },
                 shadow: Shadow::default(),
             },
@@ -654,16 +654,16 @@ impl iced_container::Catalog for Theme {
             Container::Dialog => iced_container::Style {
                 icon_color: Some(Color::from(cosmic.primary.on)),
                 text_color: Some(Color::from(cosmic.primary.on)),
-                background: Some(iced::Background::Color(cosmic.primary.base.into())),
+                background: Some(iced::Background::Color(Color::from_rgb8(245, 245, 245))),
                 border: Border {
-                    color: cosmic.primary.divider.into(),
-                    width: 1.0,
+                    color: Color::TRANSPARENT,
+                    width: 0.0,
                     radius: cosmic.corner_radii.radius_m.into(),
                 },
                 shadow: Shadow {
-                    color: cosmic.shade.into(),
-                    offset: Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.25),
+                    offset: Vector::new(0.0, 8.0),
+                    blur_radius: 32.0,
                 },
             },
         }
@@ -693,56 +693,40 @@ impl slider::Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: slider::Status) -> slider::Style {
         let cosmic: &cosmic_theme::Theme = self.cosmic();
-        let hc = self.theme_type.is_high_contrast();
-        let is_dark = self.theme_type.is_dark();
 
         let mut appearance = match class {
             Slider::Standard =>
             //TODO: no way to set rail thickness
             {
-                let (active_track, inactive_track) = if hc {
-                    (
-                        cosmic.accent_text_color(),
-                        if is_dark {
-                            cosmic.palette.neutral_5
-                        } else {
-                            cosmic.palette.neutral_3
-                        },
-                    )
-                } else {
-                    (cosmic.accent.base, cosmic.palette.neutral_6)
-                };
+                let empty_track: Color = Color::from_rgb8(240, 240, 240);
                 slider::Style {
                     rail: Rail {
                         backgrounds: (
-                            Background::Color(active_track.into()),
-                            Background::Color(inactive_track.into()),
+                            Background::Color(crate::theme::STATE_DEFAULT_COLOR),
+                            Background::Color(empty_track),
                         ),
                         border: Border {
                             radius: cosmic.corner_radii.radius_xs.into(),
-                            color: if hc && !is_dark {
-                                self.current_container().component.border.into()
-                            } else {
-                                Color::TRANSPARENT
-                            },
-                            width: if hc && !is_dark { 1. } else { 0. },
+                            color: Color::TRANSPARENT,
+                            width: 0.0,
                         },
-                        width: 4.0,
+                        width: 6.0,
                     },
 
                     handle: slider::Handle {
-                        shape: slider::HandleShape::Rectangle {
-                            height: 20,
-                            width: 20,
-                            border_radius: cosmic.corner_radii.radius_m.into(),
+                        shape: slider::HandleShape::Circle { radius: 10.0 },
+                        border_color: Color::from_rgb8(200, 200, 200),
+                        border_width: 1.0,
+                        background: Background::Color(Color::WHITE),
+                        shadow: Shadow {
+                            color: Color::from_rgba8(0, 0, 0, 0.10),
+                            offset: Vector::new(0.0, 1.0),
+                            blur_radius: 3.0,
                         },
-                        border_color: Color::TRANSPARENT,
-                        border_width: 0.0,
-                        background: Background::Color(cosmic.accent.base.into()),
                     },
 
                     breakpoint: slider::Breakpoint {
-                        color: cosmic.on_bg_color().into(),
+                        color: crate::theme::STATE_DEFAULT_COLOR,
                     },
                 }
             }
@@ -752,34 +736,29 @@ impl slider::Catalog for Theme {
             slider::Status::Active => appearance,
             slider::Status::Hovered => match class {
                 Slider::Standard => {
-                    appearance.handle.shape = slider::HandleShape::Rectangle {
-                        height: 26,
-                        width: 26,
-                        border_radius: cosmic.corner_radii.radius_m.into(),
+                    appearance.handle.shape = slider::HandleShape::Circle { radius: 12.0 };
+                    appearance.handle.border_width = 1.0;
+                    appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
+                    appearance.handle.shadow = Shadow {
+                        color: Color::from_rgba8(0, 0, 0, 0.12),
+                        offset: Vector::new(0.0, 1.0),
+                        blur_radius: 4.0,
                     };
-                    appearance.handle.border_width = 3.0;
-                    appearance.handle.border_color =
-                        self.cosmic().palette.neutral_10.with_alpha(0.1).into();
                     appearance
                 }
                 Slider::Custom { hovered, .. } => hovered(self),
             },
             slider::Status::Dragged => match class {
                 Slider::Standard => {
-                    let mut style = {
-                        appearance.handle.shape = slider::HandleShape::Rectangle {
-                            height: 26,
-                            width: 26,
-                            border_radius: cosmic.corner_radii.radius_m.into(),
-                        };
-                        appearance.handle.border_width = 3.0;
-                        appearance.handle.border_color =
-                            self.cosmic().palette.neutral_10.with_alpha(0.1).into();
-                        appearance
+                    appearance.handle.shape = slider::HandleShape::Circle { radius: 12.0 };
+                    appearance.handle.border_width = 1.0;
+                    appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
+                    appearance.handle.shadow = Shadow {
+                        color: Color::from_rgba8(0, 0, 0, 0.12),
+                        offset: Vector::new(0.0, 1.0),
+                        blur_radius: 4.0,
                     };
-                    style.handle.border_color =
-                        self.cosmic().palette.neutral_10.with_alpha(0.2).into();
-                    style
+                    appearance
                 }
                 Slider::Custom { dragging, .. } => dragging(self),
             },
@@ -802,8 +781,8 @@ impl menu::Catalog for Theme {
                 radius: cosmic.corner_radii.radius_m.into(),
                 ..Default::default()
             },
-            selected_text_color: cosmic.accent_text_color().into(),
-            selected_background: Background::Color(cosmic.background.component.hover.into()),
+            selected_text_color: crate::theme::STATE_DEFAULT_COLOR,
+            selected_background: Background::Color(crate::theme::STATE_DEFAULT_BG),
         }
     }
 }
@@ -825,16 +804,11 @@ impl pick_list::Catalog for Theme {
             background: Color::TRANSPARENT.into(),
             placeholder_color: cosmic.on_bg_color().into(),
             border: Border {
-                radius: cosmic.corner_radii.radius_m.into(),
-                width: if hc { 1. } else { 0. },
-                color: if hc {
-                    self.current_container().component.border.into()
-                } else {
-                    Color::TRANSPARENT
-                },
+                radius: cosmic.corner_radii.radius_s.into(),
+                width: 1.0,
+                color: crate::theme::LIGHT_GRAY,
             },
-            // icon_size: 0.7, // TODO: how to replace
-            handle_color: cosmic.on_bg_color().into(),
+            handle_color: crate::theme::HANDLE_GRAY,
         };
 
         match status {
@@ -912,17 +886,22 @@ impl toggler::Catalog for Theme {
     fn style(&self, class: &Self::Class<'_>, status: toggler::Status) -> toggler::Style {
         let cosmic = self.cosmic();
         const HANDLE_MARGIN: f32 = 2.0;
-        let neutral_10 = cosmic.palette.neutral_10.with_alpha(0.1);
 
-        let mut active = toggler::Style {
-            background: if matches!(status, toggler::Status::Active { is_toggled: true }) {
-                cosmic.accent.base.into()
-            } else if cosmic.is_dark {
-                cosmic.palette.neutral_6.into()
-            } else {
-                cosmic.palette.neutral_5.into()
-            },
-            foreground: cosmic.palette.neutral_2.into(),
+        let is_toggled = matches!(
+            status,
+            toggler::Status::Active { is_toggled: true }
+                | toggler::Status::Hovered { is_toggled: true }
+        );
+
+        let track_color = if is_toggled {
+            crate::theme::STATE_DEFAULT_COLOR
+        } else {
+            crate::theme::LIGHT_GRAY
+        };
+
+        let mut style = toggler::Style {
+            background: track_color,
+            foreground: Color::WHITE,
             border_radius: cosmic.radius_xl().into(),
             handle_radius: cosmic
                 .radius_xl()
@@ -935,30 +914,10 @@ impl toggler::Catalog for Theme {
             foreground_border_color: Color::TRANSPARENT,
         };
         match status {
-            toggler::Status::Active { is_toggled } => active,
-            toggler::Status::Hovered { is_toggled } => {
-                let is_active = matches!(status, toggler::Status::Hovered { is_toggled: true });
-                toggler::Style {
-                    background: if is_active {
-                        over(neutral_10, cosmic.accent_color())
-                    } else {
-                        over(
-                            neutral_10,
-                            if cosmic.is_dark {
-                                cosmic.palette.neutral_6
-                            } else {
-                                cosmic.palette.neutral_5
-                            },
-                        )
-                    }
-                    .into(),
-                    ..active
-                }
-            }
+            toggler::Status::Active { .. } | toggler::Status::Hovered { .. } => style,
             toggler::Status::Disabled => {
-                active.background.a /= 2.;
-                active.foreground.a /= 2.;
-                active
+                style.background.a /= 2.;
+                style
             }
         }
     }
@@ -1349,7 +1308,6 @@ impl text_input::Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: text_input::Status) -> text_input::Style {
         let palette = self.cosmic();
-        let bg = self.current_container().small_widget.with_alpha(0.25);
 
         let neutral_9 = palette.palette.neutral_9;
         let value = neutral_9.into();
@@ -1358,7 +1316,7 @@ impl text_input::Catalog for Theme {
 
         let mut appearance = match class {
             TextInput::Default => text_input::Style {
-                background: Color::from(bg).into(),
+                background: Color::WHITE.into(),
                 border: Border {
                     radius: palette.corner_radii.radius_s.into(),
                     width: 1.0,
@@ -1370,7 +1328,7 @@ impl text_input::Catalog for Theme {
                 selection,
             },
             TextInput::Search => text_input::Style {
-                background: Color::from(bg).into(),
+                background: Color::WHITE.into(),
                 border: Border {
                     radius: palette.corner_radii.radius_m.into(),
                     ..Default::default()
@@ -1384,64 +1342,56 @@ impl text_input::Catalog for Theme {
 
         match status {
             text_input::Status::Active => appearance,
-            text_input::Status::Hovered => {
-                let bg = self.current_container().small_widget.with_alpha(0.25);
-
-                match class {
-                    TextInput::Default => text_input::Style {
-                        background: Color::from(bg).into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_s.into(),
-                            width: 1.0,
-                            color: self.current_container().on.into(),
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+            text_input::Status::Hovered => match class {
+                TextInput::Default => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_s.into(),
+                        width: 1.0,
+                        color: self.current_container().on.into(),
                     },
-                    TextInput::Search => text_input::Style {
-                        background: Color::from(bg).into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_m.into(),
-                            ..Default::default()
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+                TextInput::Search => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_m.into(),
+                        ..Default::default()
                     },
-                }
-            }
-            text_input::Status::Focused => {
-                let bg = self.current_container().small_widget.with_alpha(0.25);
-
-                match class {
-                    TextInput::Default => text_input::Style {
-                        background: Color::from(bg).into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_s.into(),
-                            width: 1.0,
-                            color: palette.accent.base.into(),
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+            },
+            text_input::Status::Focused => match class {
+                TextInput::Default => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_s.into(),
+                        width: 1.0,
+                        color: palette.accent.base.into(),
                     },
-                    TextInput::Search => text_input::Style {
-                        background: Color::from(bg).into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_m.into(),
-                            ..Default::default()
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+                TextInput::Search => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_m.into(),
+                        ..Default::default()
                     },
-                }
-            }
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+            },
             text_input::Status::Disabled => {
                 appearance.background = match appearance.background {
                     Background::Color(color) => Background::Color(Color {

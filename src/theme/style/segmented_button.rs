@@ -71,10 +71,41 @@ impl StyleSheet for Theme {
                 }
             }
 
-            SegmentedButton::NavBar | SegmentedButton::FileNav => Appearance {
-                active_width: 0.0,
-                ..horizontal::tab_bar(cosmic, container)
-            },
+            SegmentedButton::NavBar | SegmentedButton::FileNav => {
+                let rad_m = cosmic.corner_radii.radius_m;
+                let item_border = ItemAppearance {
+                    border: Border {
+                        radius: rad_m.into(),
+                        ..Default::default()
+                    },
+                };
+                let active = ItemStatusAppearance {
+                    background: Some(Background::Color(crate::theme::STATE_DEFAULT_BG)),
+                    first: item_border,
+                    middle: item_border,
+                    last: item_border,
+                    text_color: crate::theme::STATE_DEFAULT_COLOR,
+                };
+                let inactive = ItemStatusAppearance {
+                    background: None,
+                    first: item_border,
+                    middle: item_border,
+                    last: item_border,
+                    text_color: container.component.on.into(),
+                };
+                Appearance {
+                    active_width: 0.0,
+                    border: Border {
+                        radius: cosmic.corner_radii.radius_0.into(),
+                        ..Default::default()
+                    },
+                    inactive,
+                    hover: inactive,
+                    pressed: inactive,
+                    active,
+                    ..Default::default()
+                }
+            }
 
             SegmentedButton::TabBar => horizontal::tab_bar(cosmic, container),
 
@@ -126,10 +157,51 @@ impl StyleSheet for Theme {
                 }
             }
 
-            SegmentedButton::NavBar | SegmentedButton::FileNav => Appearance {
-                active_width: 0.0,
-                ..vertical::tab_bar(cosmic, container)
-            },
+            SegmentedButton::NavBar | SegmentedButton::FileNav => {
+                let rad_m = cosmic.corner_radii.radius_m;
+                let active = ItemStatusAppearance {
+                    background: Some(Background::Color(crate::theme::STATE_DEFAULT_BG)),
+                    first: ItemAppearance {
+                        border: Border {
+                            radius: rad_m.into(),
+                            ..Default::default()
+                        },
+                    },
+                    middle: ItemAppearance {
+                        border: Border {
+                            radius: rad_m.into(),
+                            ..Default::default()
+                        },
+                    },
+                    last: ItemAppearance {
+                        border: Border {
+                            radius: rad_m.into(),
+                            ..Default::default()
+                        },
+                    },
+                    text_color: crate::theme::STATE_DEFAULT_COLOR,
+                };
+                let inactive = ItemStatusAppearance {
+                    background: None,
+                    first: active.first,
+                    middle: active.middle,
+                    last: active.last,
+                    text_color: container.component.on.into(),
+                };
+                let hover_state = inactive;
+                Appearance {
+                    active_width: 0.0,
+                    border: Border {
+                        radius: cosmic.corner_radii.radius_0.into(),
+                        ..Default::default()
+                    },
+                    inactive,
+                    hover: hover_state,
+                    pressed: hover_state,
+                    active,
+                    ..Default::default()
+                }
+            }
 
             SegmentedButton::TabBar => vertical::tab_bar(cosmic, container),
 
@@ -147,33 +219,37 @@ mod horizontal {
     use palette::WithAlpha;
 
     pub fn tab_bar(cosmic: &cosmic_theme::Theme, container: &Container) -> Appearance {
-        let active = tab_bar_active(cosmic);
-        let hc = cosmic.is_high_contrast;
-        let border = if hc {
-            Border {
-                color: container.component.border.into(),
-                radius: cosmic.corner_radii.radius_0.into(),
-                width: 1.0,
-            }
-        } else {
-            Border::default()
+        let rad_m = cosmic.corner_radii.radius_m;
+        let item_border = ItemAppearance {
+            border: Border {
+                radius: rad_m.into(),
+                ..Default::default()
+            },
+        };
+        let active = ItemStatusAppearance {
+            background: Some(Background::Color(crate::theme::STATE_DEFAULT_BG)),
+            first: item_border,
+            middle: item_border,
+            last: item_border,
+            text_color: crate::theme::STATE_DEFAULT_COLOR,
+        };
+        let inactive = ItemStatusAppearance {
+            background: None,
+            first: item_border,
+            middle: item_border,
+            last: item_border,
+            text_color: container.component.on.into(),
         };
 
         Appearance {
-            active_width: 4.0,
+            active_width: 0.0,
             border: Border {
                 radius: cosmic.corner_radii.radius_0.into(),
                 ..Default::default()
             },
-            inactive: ItemStatusAppearance {
-                background: None,
-                first: ItemAppearance { border },
-                middle: ItemAppearance { border },
-                last: ItemAppearance { border },
-                text_color: container.component.on.into(),
-            },
-            hover: super::hover(cosmic, &active, 0.3),
-            pressed: super::hover(cosmic, &active, 0.25),
+            inactive,
+            hover: inactive,
+            pressed: inactive,
             active,
             ..Default::default()
         }
@@ -181,7 +257,7 @@ mod horizontal {
 
     pub fn selection_active(
         cosmic: &cosmic_theme::Theme,
-        component: &Component,
+        _component: &Component,
     ) -> ItemStatusAppearance {
         let rad_xl = cosmic.corner_radii.radius_xl;
         let rad_0 = cosmic.corner_radii.radius_0;
@@ -211,38 +287,6 @@ mod horizontal {
             text_color: cosmic.accent_text_color().into(),
         }
     }
-
-    pub fn tab_bar_active(cosmic: &cosmic_theme::Theme) -> ItemStatusAppearance {
-        let rad_s = cosmic.corner_radii.radius_s;
-        let rad_0 = cosmic.corner_radii.radius_0;
-        ItemStatusAppearance {
-            background: Some(Background::Color(
-                cosmic.palette.neutral_5.with_alpha(0.2).into(),
-            )),
-            first: ItemAppearance {
-                border: Border {
-                    color: cosmic.accent.base.into(),
-                    radius: Radius::from([rad_s[0], rad_s[1], rad_0[2], rad_0[3]]),
-                    width: 0.0,
-                },
-            },
-            middle: ItemAppearance {
-                border: Border {
-                    color: cosmic.accent.base.into(),
-                    radius: Radius::from([rad_s[0], rad_s[1], rad_0[2], rad_0[3]]),
-                    width: 0.0,
-                },
-            },
-            last: ItemAppearance {
-                border: Border {
-                    color: cosmic.accent.base.into(),
-                    radius: Radius::from([rad_s[0], rad_s[1], rad_0[2], rad_0[3]]),
-                    width: 0.0,
-                },
-            },
-            text_color: cosmic.accent_text_color().into(),
-        }
-    }
 }
 
 mod vertical {
@@ -254,20 +298,37 @@ mod vertical {
     use palette::WithAlpha;
 
     pub fn tab_bar(cosmic: &cosmic_theme::Theme, container: &Container) -> Appearance {
-        let active = tab_bar_active(cosmic);
+        let rad_m = cosmic.corner_radii.radius_m;
+        let item_border = ItemAppearance {
+            border: Border {
+                radius: rad_m.into(),
+                ..Default::default()
+            },
+        };
+        let active = ItemStatusAppearance {
+            background: Some(Background::Color(crate::theme::STATE_DEFAULT_BG)),
+            first: item_border,
+            middle: item_border,
+            last: item_border,
+            text_color: crate::theme::STATE_DEFAULT_COLOR,
+        };
+        let inactive = ItemStatusAppearance {
+            background: None,
+            first: item_border,
+            middle: item_border,
+            last: item_border,
+            text_color: container.component.on.into(),
+        };
+
         Appearance {
-            active_width: 4.0,
+            active_width: 0.0,
             border: Border {
                 radius: cosmic.corner_radii.radius_0.into(),
                 ..Default::default()
             },
-            inactive: ItemStatusAppearance {
-                background: None,
-                text_color: container.component.on.into(),
-                ..active
-            },
-            hover: super::hover(cosmic, &active, 0.3),
-            pressed: super::hover(cosmic, &active, 0.25),
+            inactive,
+            hover: inactive,
+            pressed: inactive,
             active,
             ..Default::default()
         }
@@ -275,7 +336,7 @@ mod vertical {
 
     pub fn selection_active(
         cosmic: &cosmic_theme::Theme,
-        component: &Component,
+        _component: &Component,
     ) -> ItemStatusAppearance {
         let rad_0 = cosmic.corner_radii.radius_0;
         let rad_xl = cosmic.corner_radii.radius_xl;
@@ -299,36 +360,6 @@ mod vertical {
             last: ItemAppearance {
                 border: Border {
                     radius: Radius::from([rad_0[0], rad_0[1], rad_xl[2], rad_xl[3]]),
-                    ..Default::default()
-                },
-            },
-            text_color: cosmic.accent_text_color().into(),
-        }
-    }
-
-    pub fn tab_bar_active(cosmic: &cosmic_theme::Theme) -> ItemStatusAppearance {
-        ItemStatusAppearance {
-            background: Some(Background::Color(
-                cosmic.palette.neutral_5.with_alpha(0.2).into(),
-            )),
-            first: ItemAppearance {
-                border: Border {
-                    radius: cosmic.corner_radii.radius_m.into(),
-                    width: 0.0,
-                    ..Default::default()
-                },
-            },
-            middle: ItemAppearance {
-                border: Border {
-                    radius: cosmic.corner_radii.radius_m.into(),
-                    width: 0.0,
-                    ..Default::default()
-                },
-            },
-            last: ItemAppearance {
-                border: Border {
-                    radius: cosmic.corner_radii.radius_m.into(),
-                    width: 0.0,
                     ..Default::default()
                 },
             },

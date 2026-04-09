@@ -204,7 +204,9 @@ where
         Self {
             model,
             id: Id::unique(),
-            close_icon: icon::from_name("window-close-symbolic").size(16).icon(),
+            close_icon: icon::from_svg_bytes(icetron_assets::icons::system::CLOSE_LINE)
+                .icon()
+                .size(16),
             scrollable_focus: false,
             show_close_icon_on_hover: false,
             button_alignment: Alignment::Start,
@@ -216,8 +218,8 @@ where
             minimum_button_width: u16::MIN,
             maximum_button_width: u16::MAX,
             indent_spacing: 16,
-            font_active: crate::font::semibold(),
-            font_hovered: crate::font::semibold(),
+            font_active: crate::font::default(),
+            font_hovered: crate::font::default(),
             font_inactive: crate::font::default(),
             font_size: 14.0,
             height: Length::Shrink,
@@ -857,6 +859,7 @@ where
             tab_drag_candidate: None,
             dragging_tab: None,
             drop_hint: None,
+            close_hovered: None,
             offer_mimes: Vec::new(),
         })
     }
@@ -1011,6 +1014,7 @@ where
                         "offer leave id={my_id:?} entity={entity:?}"
                     );
                     state.hovered = Item::None;
+                    state.close_hovered = None;
                     for key in self.model.order.iter().copied() {
                         self.update_entity_paragraph(state, key);
                     }
@@ -1065,6 +1069,7 @@ where
                         }
                     } else if entity.is_some() {
                         state.hovered = Item::None;
+                        state.close_hovered = None;
                         for key in self.model.order.iter().copied() {
                             self.update_entity_paragraph(state, key);
                         }
@@ -1155,6 +1160,7 @@ where
                         if let Some(event) = pending_reorder {
                             state.focused_item = Item::Tab(event.dragged);
                             state.hovered = Item::None;
+                            state.close_hovered = None;
                             for key in self.model.order.iter().copied() {
                                 self.update_entity_paragraph(state, key);
                             }
@@ -1242,6 +1248,9 @@ where
                             close_bounds(bounds, f32::from(self.close_icon.size));
                         let over_close_button = self.model.items[key].closable
                             && cursor_position.is_over(close_button_bounds);
+
+                        // Track close button hover state
+                        state.close_hovered = if over_close_button { Some(key) } else { None };
 
                         // If marked as closable, show a close icon.
                         if self.model.items[key].closable {
@@ -1355,6 +1364,7 @@ where
                     break;
                 } else if state.hovered == Item::Tab(key) {
                     state.hovered = Item::None;
+                    state.close_hovered = None;
                     self.update_entity_paragraph(state, key);
                 }
             }
@@ -1798,10 +1808,10 @@ where
             let key_is_hovered = self.button_is_hovered(state, key);
             let status_appearance = if self.button_is_pressed(state, key) {
                 appearance.pressed
-            } else if key_is_hovered || menu_open() {
-                appearance.hover
             } else if key_is_active {
                 appearance.active
+            } else if key_is_hovered || menu_open() {
+                appearance.hover
             } else {
                 appearance.inactive
             };
@@ -2032,15 +2042,52 @@ where
             if show_close_button {
                 let close_button_bounds = close_bounds(original_bounds, close_icon_width);
 
+                // Draw a red background on the close button when hovered
+                if state.close_hovered == Some(key) {
+                    let padding = 4.0;
+                    let bg_bounds = Rectangle {
+                        x: close_button_bounds.x - padding,
+                        y: close_button_bounds.y - padding,
+                        width: close_button_bounds.width + padding * 2.0,
+                        height: close_button_bounds.height + padding * 2.0,
+                    };
+                    renderer.fill_quad(
+                        renderer::Quad {
+                            bounds: bg_bounds,
+                            border: Border {
+                                radius: (bg_bounds.width / 2.0).into(),
+                                ..Default::default()
+                            },
+                            shadow: Shadow::default(),
+                        },
+                        Background::Color(crate::theme::CLOSE_RED_BG),
+                    );
+                }
+
+                let close_color = if state.close_hovered == Some(key) {
+                    crate::theme::CLOSE_RED
+                } else {
+                    status_appearance.text_color
+                };
+
+                let close_icon =
+                    self.close_icon
+                        .clone()
+                        .class(crate::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
+                            iced::widget::svg::Style {
+                                color: Some(close_color),
+                            }
+                        })));
+
                 draw_icon::<Message>(
                     renderer,
                     theme,
                     style,
                     cursor,
                     viewport,
-                    status_appearance.text_color,
+                    close_color,
                     close_button_bounds,
-                    self.close_icon.clone(),
+                    close_icon,
                 );
             }
 
@@ -2340,6 +2387,8 @@ pub struct LocalState {
     dragging_tab: Option<Entity>,
     /// Current drop hint for drag-and-drop indicator
     drop_hint: Option<DropHint>,
+    /// Track whether the close button is hovered on a specific entity
+    close_hovered: Option<Entity>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -2467,6 +2516,7 @@ mod tests {
             tab_drag_candidate: None,
             dragging_tab: Some(dragging),
             drop_hint: None,
+            close_hovered: None,
             offer_mimes: Vec::new(),
         };
         state.buttons_visible = len;

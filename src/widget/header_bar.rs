@@ -450,7 +450,6 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 let explicit_radius = self.corner_radius;
                 crate::theme::Container::custom(move |theme| {
                     let cosmic = theme.cosmic();
-                    let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
                     iced_widget::container::Style {
                         icon_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
                         text_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
@@ -458,13 +457,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                             255, 255, 255, 0.99,
                         ))),
                         border: Border {
-                            radius: [
-                                if sharp { 0.0 } else { window_radius[0] },
-                                if sharp { 0.0 } else { window_radius[1] },
-                                0.0,
-                                0.0,
-                            ]
-                            .into(),
+                            radius: [0.0; 4].into(),
                             ..Default::default()
                         },
                         shadow: Default::default(),
@@ -480,7 +473,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 .push(
                     horizontal_rule(1).class(crate::theme::Rule::Custom(Box::new(
                         |_: &crate::Theme| rule::Style {
-                            color: Color::from_rgba8(240, 240, 241, 1.0),
+                            color: crate::theme::LIGHT_GRAY,
                             width: 1,
                             radius: 0.0.into(),
                             fill_mode: rule::FillMode::Full,
@@ -502,60 +495,105 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
 
     /// Creates the widget for window controls.
     fn window_controls(&mut self) -> Element<'a, Message> {
-        const ICON_MINIMIZE: &[u8] = include_bytes!("../../res/icons/window-minimize.svg");
-        const ICON_MAXIMIZE: &[u8] = include_bytes!("../../res/icons/window-maximize.svg");
-        const ICON_RESTORE: &[u8] = include_bytes!("../../res/icons/window-restore.svg");
-        const ICON_CLOSE: &[u8] = include_bytes!("../../res/icons/window-close.svg");
+        const ICON_MINIMIZE: &[u8] = icetron_assets::icons::system::SUBTRACT_LINE;
+        const ICON_MAXIMIZE: &[u8] = icetron_assets::icons::system::CHECKBOX_BLANK_LINE;
+        const ICON_RESTORE: &[u8] = icetron_assets::icons::system::CHECKBOX_MULTIPLE_BLANK_LINE;
+        const ICON_CLOSE: &[u8] = icetron_assets::icons::system::CLOSE_LINE;
 
-        macro_rules! icon {
-            ($svg_bytes:expr, $size:expr, $on_press:expr) => {{
-                let padding = [6, 6];
+        macro_rules! wc_icon {
+            ($svg_bytes:expr, $size:expr, $on_press:expr, $is_close:expr) => {{
                 let icon_w = widget::icon::icon(widget::icon::from_svg_bytes($svg_bytes))
                     .size($size)
                     .class(crate::theme::Svg::custom(|_| iced::widget::svg::Style {
-                        color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                        color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
                     }));
-                let result: Element<'a, Message> = widget::button::custom(icon_w)
-                    .padding(padding)
-                    .class(crate::theme::Button::HeaderBar)
-                    .selected(self.focused)
+                let btn: Element<'a, Message> = widget::button::custom(icon_w)
+                    .padding([4, 6])
+                    .class(crate::theme::Button::Custom {
+                        active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                            background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                            text_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
+                            icon_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
+                            border_radius: [6.0; 4].into(),
+                            ..Default::default()
+                        }),
+                        disabled: Box::new(|_theme| crate::widget::button::Style::default()),
+                        hovered: Box::new(move |_focused, _theme| {
+                            let bg = if $is_close {
+                                Color::from_rgba8(224, 64, 64, 0.20)
+                            } else {
+                                Color::from_rgb8(208, 208, 208)
+                            };
+                            let icon_c = if $is_close {
+                                Color::from_rgb8(224, 64, 64)
+                            } else {
+                                Color::from_rgb8(0x3D, 0x3D, 0x3D)
+                            };
+                            crate::widget::button::Style {
+                                background: Some(iced::Background::Color(bg)),
+                                text_color: Some(icon_c),
+                                icon_color: Some(icon_c),
+                                border_radius: [6.0; 4].into(),
+                                ..Default::default()
+                            }
+                        }),
+                        pressed: Box::new(move |_focused, _theme| {
+                            let bg = if $is_close {
+                                Color::from_rgba8(200, 50, 50, 0.30)
+                            } else {
+                                Color::from_rgb8(190, 190, 190)
+                            };
+                            let icon_c = if $is_close {
+                                Color::from_rgb8(200, 50, 50)
+                            } else {
+                                Color::from_rgb8(0x3D, 0x3D, 0x3D)
+                            };
+                            crate::widget::button::Style {
+                                background: Some(iced::Background::Color(bg)),
+                                text_color: Some(icon_c),
+                                icon_color: Some(icon_c),
+                                border_radius: [6.0; 4].into(),
+                                ..Default::default()
+                            }
+                        }),
+                    })
                     .on_press($on_press)
                     .into();
-                result
+                btn
             }};
         }
-
-        let icon_spacing = 2;
 
         widget::row::with_capacity(3)
             .push_maybe(
                 self.on_minimize
                     .take()
-                    .map(|m: Message| icon!(ICON_MINIMIZE, 16, m)),
+                    .map(|m: Message| wc_icon!(ICON_MINIMIZE, 14, m, false)),
             )
             .push_maybe(self.on_maximize.take().map(|m| {
                 if self.maximized {
-                    icon!(ICON_RESTORE, 16, m)
+                    wc_icon!(ICON_RESTORE, 14, m, false)
                 } else {
-                    icon!(ICON_MAXIMIZE, 16, m)
+                    wc_icon!(ICON_MAXIMIZE, 14, m, false)
                 }
             }))
-            .push_maybe(self.on_close.take().map(|m| icon!(ICON_CLOSE, 16, m)))
-            .spacing(icon_spacing)
+            .push_maybe(
+                self.on_close
+                    .take()
+                    .map(|m| wc_icon!(ICON_CLOSE, 14, m, true)),
+            )
+            .spacing(2)
             .apply(widget::container)
-            .class(crate::theme::Container::custom(move |theme| {
-                let cosmic = theme.cosmic();
-                let background = Color::from_rgba8(0xFF, 0xFF, 0xFF, 0.80);
+            .class(crate::theme::Container::custom(move |_theme| {
                 iced_widget::container::Style {
-                    background: Some(iced::Background::Color(background)),
+                    background: Some(iced::Background::Color(Color::from_rgb8(232, 232, 232))),
                     border: Border {
-                        radius: cosmic.corner_radii.radius_xl.into(),
+                        radius: [8.0; 4].into(),
                         ..Default::default()
                     },
                     ..Default::default()
                 }
             }))
-            .padding([2, 8])
+            .padding([2, 4])
             .center_y(Length::Fill)
             .apply(widget::container)
             .padding(iced::Padding::from([0, 0, 0, 18]))
