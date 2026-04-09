@@ -105,7 +105,9 @@ impl<'a, Message: Clone + 'a> Button<'a, Message> {
             style: crate::theme::Button::default(),
             variant: Variant::Image {
                 on_remove,
-                close_icon: iced_core::svg::Handle::from_memory(icetron_assets::icons::system::CLOSE_LINE),
+                close_icon: iced_core::svg::Handle::from_memory(
+                    icetron_assets::icons::system::CLOSE_LINE,
+                ),
             },
         }
     }

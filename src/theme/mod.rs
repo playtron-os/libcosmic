@@ -28,9 +28,11 @@ pub const STATE_DEFAULT_COLOR: iced_core::Color =
 pub const STATE_DEFAULT_BG: iced_core::Color =
     iced_core::Color::from_rgba(0.0, 0.588_235_3, 0.533_333_3, 0.10);
 
-pub const LIGHT_GRAY: iced_core::Color = iced_core::Color::from_rgb(0.878_431_4, 0.878_431_4, 0.878_431_4);
+pub const LIGHT_GRAY: iced_core::Color =
+    iced_core::Color::from_rgb(0.878_431_4, 0.878_431_4, 0.878_431_4);
 
-pub const HANDLE_GRAY: iced_core::Color = iced_core::Color::from_rgb(0.705_882_4, 0.705_882_4, 0.705_882_4);
+pub const HANDLE_GRAY: iced_core::Color =
+    iced_core::Color::from_rgb(0.705_882_4, 0.705_882_4, 0.705_882_4);
 
 pub const CLOSE_RED: iced_core::Color = iced_core::Color::from_rgb(1.0, 0.0, 0.0);
 

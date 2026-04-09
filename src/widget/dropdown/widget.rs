@@ -413,7 +413,9 @@ impl State {
     /// Creates a new [`State`] for a [`Dropdown`].
     pub fn new() -> Self {
         Self {
-            icon: Some(iced_core::svg::Handle::from_memory(icetron_assets::icons::system::ARROW_DOWN_S_LINE)),
+            icon: Some(iced_core::svg::Handle::from_memory(
+                icetron_assets::icons::system::ARROW_DOWN_S_LINE,
+            )),
             menu: menu::State::default(),
             keyboard_modifiers: keyboard::Modifiers::default(),
             is_open: Arc::new(AtomicBool::new(false)),

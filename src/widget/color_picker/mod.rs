@@ -403,9 +403,12 @@ where
                 )
                 // TODO copy paste input contents
                 .trailing_icon({
-                    let button = button::custom(crate::widget::icon(
-                        icon::from_svg_bytes(icetron_assets::icons::document::FILE_COPY_LINE),
-                    ).size(spacing.space_s))
+                    let button = button::custom(
+                        crate::widget::icon(icon::from_svg_bytes(
+                            icetron_assets::icons::document::FILE_COPY_LINE,
+                        ))
+                        .size(spacing.space_s),
+                    )
                     .on_press(on_update(ColorPickerUpdate::Copied(Instant::now())))
                     .class(Button::Text);
 

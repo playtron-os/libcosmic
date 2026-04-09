@@ -165,9 +165,7 @@ impl Theme {
     /// get the built in dark theme
     pub fn dark_default() -> Self {
         let state_default = Srgb::new(0.0, 150.0 / 255.0, 136.0 / 255.0);
-        ThemeBuilder::dark()
-            .accent(state_default)
-            .build()
+        ThemeBuilder::dark().accent(state_default).build()
     }
 
     #[inline]
@@ -1049,7 +1047,7 @@ impl ThemeBuilder {
         let bg = if let Some(bg_color) = bg_color {
             bg_color
         } else {
-            p_ref.gray_1
+            p_ref.neutral_0
         };
 
         let step_array = steps(bg, NonZeroUsize::new(100).unwrap());

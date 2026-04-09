@@ -483,9 +483,12 @@ where
         } else {
             layout
         };
-        self.content
-            .as_widget_mut()
-            .overlay(self.tree, content_layout, renderer, Default::default())
+        self.content.as_widget_mut().overlay(
+            self.tree,
+            content_layout,
+            renderer,
+            Default::default(),
+        )
     }
 }
 

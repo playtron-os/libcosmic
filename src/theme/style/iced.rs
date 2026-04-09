@@ -714,9 +714,7 @@ impl slider::Catalog for Theme {
                     },
 
                     handle: slider::Handle {
-                        shape: slider::HandleShape::Circle {
-                            radius: 10.0,
-                        },
+                        shape: slider::HandleShape::Circle { radius: 10.0 },
                         border_color: Color::from_rgb8(200, 200, 200),
                         border_width: 1.0,
                         background: Background::Color(Color::WHITE),
@@ -738,9 +736,7 @@ impl slider::Catalog for Theme {
             slider::Status::Active => appearance,
             slider::Status::Hovered => match class {
                 Slider::Standard => {
-                    appearance.handle.shape = slider::HandleShape::Circle {
-                        radius: 12.0,
-                    };
+                    appearance.handle.shape = slider::HandleShape::Circle { radius: 12.0 };
                     appearance.handle.border_width = 1.0;
                     appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
                     appearance.handle.shadow = Shadow {
@@ -754,9 +750,7 @@ impl slider::Catalog for Theme {
             },
             slider::Status::Dragged => match class {
                 Slider::Standard => {
-                    appearance.handle.shape = slider::HandleShape::Circle {
-                        radius: 12.0,
-                    };
+                    appearance.handle.shape = slider::HandleShape::Circle { radius: 12.0 };
                     appearance.handle.border_width = 1.0;
                     appearance.handle.border_color = Color::from_rgb8(200, 200, 200);
                     appearance.handle.shadow = Shadow {
@@ -1348,60 +1342,56 @@ impl text_input::Catalog for Theme {
 
         match status {
             text_input::Status::Active => appearance,
-            text_input::Status::Hovered => {
-                match class {
-                    TextInput::Default => text_input::Style {
-                        background: Color::WHITE.into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_s.into(),
-                            width: 1.0,
-                            color: self.current_container().on.into(),
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+            text_input::Status::Hovered => match class {
+                TextInput::Default => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_s.into(),
+                        width: 1.0,
+                        color: self.current_container().on.into(),
                     },
-                    TextInput::Search => text_input::Style {
-                        background: Color::WHITE.into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_m.into(),
-                            ..Default::default()
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+                TextInput::Search => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_m.into(),
+                        ..Default::default()
                     },
-                }
-            }
-            text_input::Status::Focused => {
-                match class {
-                    TextInput::Default => text_input::Style {
-                        background: Color::WHITE.into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_s.into(),
-                            width: 1.0,
-                            color: palette.accent.base.into(),
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+            },
+            text_input::Status::Focused => match class {
+                TextInput::Default => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_s.into(),
+                        width: 1.0,
+                        color: palette.accent.base.into(),
                     },
-                    TextInput::Search => text_input::Style {
-                        background: Color::WHITE.into(),
-                        border: Border {
-                            radius: palette.corner_radii.radius_m.into(),
-                            ..Default::default()
-                        },
-                        icon: self.current_container().on.into(),
-                        placeholder,
-                        value,
-                        selection,
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+                TextInput::Search => text_input::Style {
+                    background: Color::WHITE.into(),
+                    border: Border {
+                        radius: palette.corner_radii.radius_m.into(),
+                        ..Default::default()
                     },
-                }
-            }
+                    icon: self.current_container().on.into(),
+                    placeholder,
+                    value,
+                    selection,
+                },
+            },
             text_input::Status::Disabled => {
                 appearance.background = match appearance.background {
                     Background::Color(color) => Background::Color(Color {

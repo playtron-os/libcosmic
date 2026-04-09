@@ -669,6 +669,25 @@ where
         root_status
     }
 
+    fn mouse_interaction(
+        &self,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> mouse::Interaction {
+        if cursor.is_over(layout.bounds()) {
+            // Check if hovering over any root menu button
+            for child_layout in layout.children() {
+                if cursor.is_over(child_layout.bounds()) {
+                    return mouse::Interaction::Pointer;
+                }
+            }
+        }
+        mouse::Interaction::None
+    }
+
     fn draw(
         &self,
         tree: &Tree,

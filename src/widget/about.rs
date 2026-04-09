@@ -101,7 +101,12 @@ pub fn about<'a, Message: Clone + 'static>(
             .push(widget::text(name))
             .push(horizontal_space())
             .push_maybe(
-                (!url.is_empty()).then_some(crate::widget::icon::from_svg_bytes(icetron_assets::icons::system::EXTERNAL_LINK_LINE).icon()),
+                (!url.is_empty()).then_some(
+                    crate::widget::icon::from_svg_bytes(
+                        icetron_assets::icons::system::EXTERNAL_LINK_LINE,
+                    )
+                    .icon(),
+                ),
             )
             .align_y(Alignment::Center)
             .apply(widget::button::custom)

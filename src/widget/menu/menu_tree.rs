@@ -326,10 +326,12 @@ pub fn menu_items<
                             menu_button::<'static, _>(vec![
                                 widget::text(l.clone()).into(),
                                 widget::horizontal_space().into(),
-                                widget::icon::from_svg_bytes(icetron_assets::icons::system::ARROW_RIGHT_S_LINE)
-                                    .icon()
-                                    .size(16)
-                                    .into(),
+                                widget::icon::from_svg_bytes(
+                                    icetron_assets::icons::system::ARROW_RIGHT_S_LINE,
+                                )
+                                .icon()
+                                .size(16)
+                                .into(),
                             ])
                             .class(
                                 // Menu folders have no on_press so they take on the disabled style by default

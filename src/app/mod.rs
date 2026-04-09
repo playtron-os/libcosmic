@@ -578,25 +578,21 @@ impl<App: Application> ApplicationExt for App {
                 .nav_bar()
                 .map(|nav| id_container(nav, iced_core::id::Id::new("COSMIC_nav_bar")))
             {
-                widgets.push(
-                    container(nav)
-                        .padding([0, 0, 0, 0])
-                        .into(),
-                );
+                widgets.push(container(nav).padding([0, 0, 0, 0]).into());
 
                 // Vertical divider between nav bar and content
                 {
-                    use iced::widget::{vertical_rule, rule};
+                    use iced::widget::{rule, vertical_rule};
                     widgets.push(
                         vertical_rule(1)
-                            .class(crate::theme::Rule::Custom(Box::new(
-                                |_: &crate::Theme| rule::Style {
+                            .class(crate::theme::Rule::Custom(Box::new(|_: &crate::Theme| {
+                                rule::Style {
                                     color: crate::theme::LIGHT_GRAY,
                                     width: 1,
                                     radius: 0.0.into(),
                                     fill_mode: rule::FillMode::Full,
-                                },
-                            )))
+                                }
+                            })))
                             .into(),
                     );
                 }
@@ -685,9 +681,10 @@ impl<App: Application> ApplicationExt for App {
         });
         let content_col = crate::widget::column::with_capacity(2)
             .push(content_row)
-            .push_maybe(self.footer().map(|footer| {
-                container(footer.map(crate::Action::App)).padding([0, 0, 0, 0])
-            }));
+            .push_maybe(
+                self.footer()
+                    .map(|footer| container(footer.map(crate::Action::App)).padding([0, 0, 0, 0])),
+            );
         let content: Element<_> = if content_container {
             let inner: Element<_> = content_col
                 .apply(container)
@@ -830,6 +827,10 @@ const EMBEDDED_FONTS: &[&[u8]] = &[
     include_bytes!("../../res/open-sans/OpenSans-Semibold.ttf"),
     include_bytes!("../../res/open-sans/OpenSans-Bold.ttf"),
     include_bytes!("../../res/open-sans/OpenSans-ExtraBold.ttf"),
+    include_bytes!("../../res/inter/Inter-Regular.ttf"),
+    include_bytes!("../../res/inter/Inter-Medium.ttf"),
+    include_bytes!("../../res/inter/Inter-SemiBold.ttf"),
+    include_bytes!("../../res/inter/Inter-Bold.ttf"),
     include_bytes!("../../res/noto/NotoSansMono-Regular.ttf"),
     include_bytes!("../../res/noto/NotoSansMono-Bold.ttf"),
 ];

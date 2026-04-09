@@ -14,7 +14,7 @@ use std::sync::{LazyLock, Mutex, RwLock};
 pub const ID: &str = "com.system76.CosmicTk";
 
 const MONO_FAMILY_DEFAULT: &str = "Noto Sans Mono";
-const SANS_FAMILY_DEFAULT: &str = "Open Sans";
+const SANS_FAMILY_DEFAULT: &str = "Inter";
 
 /// Stores static strings of the family names for `iced::Font` compatibility.
 pub static FAMILY_MAP: LazyLock<Mutex<BTreeSet<&'static str>>> = LazyLock::new(Mutex::default);

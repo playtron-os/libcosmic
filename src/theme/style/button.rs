@@ -75,9 +75,7 @@ pub fn appearance(
             corner_radii = &cosmic.corner_radii.radius_m;
         }
 
-        Button::Suggested
-        | Button::Destructive
-        | Button::Transparent => {
+        Button::Suggested | Button::Destructive | Button::Transparent => {
             let style_component = match style {
                 Button::Suggested => &cosmic.accent_button,
                 Button::Destructive => &cosmic.destructive_button,
@@ -167,8 +165,7 @@ pub fn appearance(
             let (background, text, icon) = color(&cosmic.background.component);
 
             if selected {
-                appearance.background =
-                    Some(Background::Color(crate::theme::STATE_DEFAULT_BG));
+                appearance.background = Some(Background::Color(crate::theme::STATE_DEFAULT_BG));
                 appearance.icon_color = Some(crate::theme::STATE_DEFAULT_COLOR);
                 appearance.text_color = Some(crate::theme::STATE_DEFAULT_COLOR);
             } else {
@@ -269,17 +266,9 @@ impl Catalog for crate::Theme {
                 };
 
                 if matches!(style, Button::ListItem | Button::Text) {
-                    (
-                        crate::theme::STATE_DEFAULT_BG,
-                        text_color,
-                        text_color,
-                    )
+                    (crate::theme::STATE_DEFAULT_BG, text_color, text_color)
                 } else if matches!(style, Button::MenuItem | Button::MenuFolder) {
-                    (
-                        Color::from_rgb8(230, 230, 230),
-                        text_color,
-                        text_color,
-                    )
+                    (Color::from_rgb8(230, 230, 230), text_color, text_color)
                 } else {
                     (component.hover.into(), text_color, text_color)
                 }
@@ -304,17 +293,9 @@ impl Catalog for crate::Theme {
             };
 
             if matches!(style, Button::ListItem | Button::Text) {
-                (
-                    crate::theme::STATE_DEFAULT_BG,
-                    text_color,
-                    text_color,
-                )
+                (crate::theme::STATE_DEFAULT_BG, text_color, text_color)
             } else if matches!(style, Button::MenuItem | Button::MenuFolder) {
-                (
-                    Color::from_rgb8(220, 220, 220),
-                    text_color,
-                    text_color,
-                )
+                (Color::from_rgb8(220, 220, 220), text_color, text_color)
             } else {
                 (component.pressed.into(), text_color, text_color)
             }

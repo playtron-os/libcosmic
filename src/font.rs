@@ -20,6 +20,14 @@ pub fn light() -> Font {
 }
 
 #[inline]
+pub fn medium() -> Font {
+    Font {
+        weight: Weight::Medium,
+        ..default()
+    }
+}
+
+#[inline]
 pub fn semibold() -> Font {
     Font {
         weight: Weight::Semibold,

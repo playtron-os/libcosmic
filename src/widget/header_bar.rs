@@ -6,7 +6,6 @@ use crate::{Element, theme, widget};
 use apply::Apply;
 use derive_setters::Setters;
 use iced::{Border, Color, Length};
-use iced_core::font::Weight;
 use iced_core::{Vector, Widget, widget::tree};
 use std::borrow::Cow;
 
@@ -326,139 +325,100 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
     #[allow(clippy::too_many_lines)]
     /// Converts the headerbar builder into an Iced element.
     pub fn view(mut self) -> Element<'a, Message> {
-        let Spacing {
-            space_xxxs,
-            space_xxs,
-            ..
-        } = theme::spacing();
+        let Spacing { space_xxxs, .. } = theme::spacing();
 
         // Take ownership of the regions to be packed.
-        let mut start = std::mem::take(&mut self.start);
+        let start = std::mem::take(&mut self.start);
         let center = std::mem::take(&mut self.center);
         let mut end = std::mem::take(&mut self.end);
 
-        let window_control_cnt = self.on_close.is_some() as usize
-            + self.on_maximize.is_some() as usize
-            + self.on_minimize.is_some() as usize;
         // Also packs the window controls at the very end.
         end.push(self.window_controls());
 
-        // Build the title element (with optional app icon) and place it in the start region.
-        if !self.title.is_empty() && !self.is_condensed {
+        // Build the title element (with optional app icon) as a separate draggable element.
+        let title_element: Option<Element<'a, Message>> = if !self.title.is_empty()
+            && !self.is_condensed
+        {
             let mut title = Cow::default();
             std::mem::swap(&mut title, &mut self.title);
 
-            // SSD uses custom font: 15px, Inter (interface font), weight 500, color #474747
-            let title_text: Element<'a, Message> = if self.is_ssd {
-                let medium_font = iced::Font {
-                    weight: Weight::Medium,
-                    ..crate::font::default()
-                };
-                widget::text(title)
-                    .size(15.0)
-                    .font(medium_font)
-                    .class(Color::from_rgb8(0x1B, 0x1B, 0x1B))
+            let title_text: Element<'a, Message> = widget::text(title)
+                .size(15.0)
+                .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(20.0)))
+                .font(crate::font::medium())
+                .class(Color::from_rgb8(0x1B, 0x1B, 0x1B))
+                .into();
+
+            let title_el: Element<'a, Message> = if let Some(icon_handle) = self.app_icon.take() {
+                let (icon_size, icon_gap) = (18, 8);
+                let icon_widget = widget::icon::icon(icon_handle)
+                    .size(icon_size)
+                    .content_fit(iced::ContentFit::Contain);
+                widget::row::with_capacity(2)
+                    .push(icon_widget)
+                    .push(title_text)
+                    .spacing(icon_gap)
+                    .align_y(iced::Alignment::Center)
                     .into()
             } else {
-                widget::text::title3(title).into()
+                title_text
             };
 
-            // SSD icon: request high-res source (128px lookup in resolve_app_icon),
-            // display at 18px with Contain to preserve aspect ratio.
-            let title_element: Element<'a, Message> =
-                if let Some(icon_handle) = self.app_icon.take() {
-                    let (icon_size, icon_gap) = if self.is_ssd {
-                        (18, 8)
-                    } else {
-                        (24, space_xxs)
-                    };
-                    let icon_widget = if self.is_ssd {
-                        widget::icon::icon(icon_handle)
-                            .size(icon_size)
-                            .content_fit(iced::ContentFit::Contain)
-                    } else {
-                        widget::icon::icon(icon_handle).size(icon_size)
-                    };
-                    widget::row::with_capacity(2)
-                        .push(icon_widget)
-                        .push(title_text)
-                        .spacing(icon_gap)
-                        .align_y(iced::Alignment::Center)
-                        .into()
-                } else {
-                    title_text
-                };
+            // Wrap title in a drag-enabled mouse area
+            let mut title_area = widget::container(title_el)
+                .center_y(Length::Fill)
+                .width(Length::Fill)
+                .apply(widget::mouse_area)
+                .interaction(iced_core::mouse::Interaction::Grab);
 
-            start.push(title_element);
-        }
-
-        // Center content depending on window border
-        // Non-maximized windows use larger horizontal padding to clear rounded corners.
-        let padding = match self.density.unwrap_or_else(crate::config::header_size) {
-            Density::Compact => {
-                if self.maximized {
-                    [4, 8, 4, 8]
-                } else {
-                    [3, 16, 4, 16]
-                }
+            if let Some(message) = self.on_drag.clone() {
+                title_area = title_area.on_drag(message);
             }
-            _ => {
-                if self.maximized {
-                    [8, 8, 8, 8]
-                } else {
-                    [7, 16, 8, 16]
-                }
+            if let Some(message) = self.on_double_click.clone() {
+                title_area = title_area.on_double_press(message);
             }
-        };
-
-        let acc_count = |v: &[Element<'a, Message>]| {
-            v.iter().fold(0, |acc, e| {
-                acc + match e.as_widget().size().width {
-                    Length::Fixed(w) if w > 30. => (w / 30.0).ceil() as usize,
-                    _ => 1,
-                }
-            })
-        };
-
-        let left_len = acc_count(&start);
-        let right_len = acc_count(&end);
-
-        let portion = ((left_len.max(right_len + window_control_cnt) as f32
-            / center.len().max(1) as f32)
-            .round() as u16)
-            .max(1);
-        let (left_portion, right_portion) = if center.is_empty() {
-            let left_to_right_ratio = left_len as f32 / right_len.max(1) as f32;
-            let right_to_left_ratio = right_len as f32 / left_len.max(1) as f32;
-            if right_to_left_ratio > 2. || left_len < 1 {
-                (1, 2)
-            } else if left_to_right_ratio > 2. || right_len < 1 {
-                (2, 1)
-            } else {
-                (left_len as u16, (right_len + window_control_cnt) as u16)
+            if let Some(message) = self.on_right_click.clone() {
+                title_area = title_area.on_right_press(message);
             }
+
+            Some(title_area.into())
         } else {
-            (portion, portion)
+            // No title: create a draggable spacer to fill remaining space
+            let mut spacer =
+                widget::container(iced::widget::Space::new(Length::Fill, Length::Fill))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .apply(widget::mouse_area)
+                    .interaction(iced_core::mouse::Interaction::Grab);
+
+            if let Some(message) = self.on_drag.clone() {
+                spacer = spacer.on_drag(message);
+            }
+            if let Some(message) = self.on_double_click.clone() {
+                spacer = spacer.on_double_press(message);
+            }
+            if let Some(message) = self.on_right_click.clone() {
+                spacer = spacer.on_right_press(message);
+            }
+
+            Some(spacer.into())
         };
 
         let (header_height, header_padding) = (Length::Fixed(48.0), [8, 12, 8, 12]);
 
         // Creates the headerbar widget.
-        let widget = widget::row::with_capacity(3)
-            // Start region: includes app icon + title + user start elements.
+        let widget = widget::row::with_capacity(4)
+            // Start region: interactive elements (menu bar, nav toggle).
             .push(
                 widget::row::with_children(start)
                     .spacing(space_xxxs)
                     .align_y(iced::Alignment::Center)
                     .apply(widget::container)
                     .align_x(iced::Alignment::Start)
-                    // SSD: title fills all remaining space; non-SSD: use portion ratio
-                    .width(if self.is_ssd {
-                        Length::Fill
-                    } else {
-                        Length::FillPortion(left_portion)
-                    }),
+                    .width(Length::Shrink),
             )
+            // Title region: draggable area with app icon + title.
+            .push_maybe(title_element)
             // Center region: only explicit center elements.
             .push_maybe(if !center.is_empty() {
                 Some(
@@ -474,16 +434,11 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             })
             .push(
                 widget::row::with_children(end)
-                    .spacing(space_xxs)
+                    .spacing(2)
                     .align_y(iced::Alignment::Center)
                     .apply(widget::container)
                     .align_x(iced::Alignment::End)
-                    // SSD: buttons shrink to fit; non-SSD: use portion ratio
-                    .width(if self.is_ssd {
-                        Length::Shrink
-                    } else {
-                        Length::FillPortion(right_portion)
-                    }),
+                    .width(Length::Shrink),
             )
             .align_y(iced::Alignment::Center)
             .height(header_height)
@@ -526,23 +481,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
 
         let mut widget = widget;
 
-        // SSD: show grab cursor over header (buttons override with pointer)
-        if self.is_ssd {
-            widget = widget.interaction(iced_core::mouse::Interaction::Grab);
-        }
-
-        // Assigns a message to emit when the headerbar is dragged.
-        if let Some(message) = self.on_drag.clone() {
-            widget = widget.on_drag(message);
-        }
-
-        // Assigns a message to emit when the headerbar is double-clicked.
-        if let Some(message) = self.on_maximize.clone() {
-            widget = widget.on_release(message);
-        }
-        if let Some(message) = self.on_double_click.clone() {
-            widget = widget.on_double_press(message);
-        }
+        // Right-click menu on overall header area (not drag — drag is on title only)
         if let Some(message) = self.on_right_click.clone() {
             widget = widget.on_right_press(message);
         }
@@ -567,14 +506,12 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 let btn: Element<'a, Message> = widget::button::custom(icon_w)
                     .padding([4, 6])
                     .class(crate::theme::Button::Custom {
-                        active: Box::new(move |_focused, _theme| {
-                            crate::widget::button::Style {
-                                background: Some(iced::Background::Color(Color::TRANSPARENT)),
-                                text_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
-                                icon_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
-                                border_radius: [6.0; 4].into(),
-                                ..Default::default()
-                            }
+                        active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                            background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                            text_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
+                            icon_color: Some(Color::from_rgb8(0x3D, 0x3D, 0x3D)),
+                            border_radius: [6.0; 4].into(),
+                            ..Default::default()
                         }),
                         disabled: Box::new(|_theme| crate::widget::button::Style::default()),
                         hovered: Box::new(move |_focused, _theme| {
@@ -635,7 +572,11 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     wc_icon!(ICON_MAXIMIZE, 14, m, false)
                 }
             }))
-            .push_maybe(self.on_close.take().map(|m| wc_icon!(ICON_CLOSE, 14, m, true)))
+            .push_maybe(
+                self.on_close
+                    .take()
+                    .map(|m| wc_icon!(ICON_CLOSE, 14, m, true)),
+            )
             .spacing(2)
             .apply(widget::container)
             .class(crate::theme::Container::custom(move |_theme| {

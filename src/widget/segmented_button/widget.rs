@@ -204,7 +204,9 @@ where
         Self {
             model,
             id: Id::unique(),
-            close_icon: icon::from_svg_bytes(icetron_assets::icons::system::CLOSE_LINE).icon().size(16),
+            close_icon: icon::from_svg_bytes(icetron_assets::icons::system::CLOSE_LINE)
+                .icon()
+                .size(16),
             scrollable_focus: false,
             show_close_icon_on_hover: false,
             button_alignment: Alignment::Start,
@@ -1246,11 +1248,7 @@ where
                             && cursor_position.is_over(close_button_bounds);
 
                         // Track close button hover state
-                        state.close_hovered = if over_close_button {
-                            Some(key)
-                        } else {
-                            None
-                        };
+                        state.close_hovered = if over_close_button { Some(key) } else { None };
 
                         // If marked as closable, show a close icon.
                         if self.model.items[key].closable {
@@ -2070,13 +2068,14 @@ where
                     status_appearance.text_color
                 };
 
-                let close_icon = self.close_icon.clone().class(
-                    crate::theme::Svg::Custom(std::rc::Rc::new(
-                        move |_theme| iced::widget::svg::Style {
-                            color: Some(close_color),
-                        },
-                    )),
-                );
+                let close_icon =
+                    self.close_icon
+                        .clone()
+                        .class(crate::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
+                            iced::widget::svg::Style {
+                                color: Some(close_color),
+                            }
+                        })));
 
                 draw_icon::<Message>(
                     renderer,
