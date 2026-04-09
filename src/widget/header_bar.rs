@@ -446,12 +446,16 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             .spacing(8)
             .apply(widget::container)
             .class({
+                let sharp = self.sharp_corners;
+                let explicit_radius = self.corner_radius;
                 crate::theme::Container::custom(move |theme| {
                     let cosmic = theme.cosmic();
                     iced_widget::container::Style {
-                        icon_color: Some(Color::from(cosmic.background.on)),
-                        text_color: Some(Color::from(cosmic.background.on)),
-                        background: Some(iced::Background::Color(Color::WHITE)),
+                        icon_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                        text_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                        background: Some(iced::Background::Color(Color::from_rgba8(
+                            255, 255, 255, 0.99,
+                        ))),
                         border: Border {
                             radius: [0.0; 4].into(),
                             ..Default::default()
@@ -590,6 +594,9 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 }
             }))
             .padding([2, 4])
+            .center_y(Length::Fill)
+            .apply(widget::container)
+            .padding(iced::Padding::from([0, 0, 0, 18]))
             .center_y(Length::Fill)
             .into()
     }

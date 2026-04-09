@@ -277,6 +277,7 @@ where
                 shaping: Shaping::Advanced,
                 wrapping: Wrapping::None,
                 line_height: self.line_height,
+                letter_spacing: None,
             };
 
             if let Some(paragraph) = state.paragraphs.get_mut(key) {
@@ -605,6 +606,7 @@ where
                         shaping: Shaping::Advanced,
                         wrapping: Wrapping::default(),
                         line_height: self.line_height,
+                        letter_spacing: None,
                     })
                 });
 

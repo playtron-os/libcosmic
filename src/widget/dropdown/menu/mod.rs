@@ -644,6 +644,7 @@ where
                     vertical_alignment: alignment::Vertical::Center,
                     shaping: text::Shaping::Advanced,
                     wrapping: text::Wrapping::default(),
+                    letter_spacing: None,
                 },
                 bounds.position(),
                 color,

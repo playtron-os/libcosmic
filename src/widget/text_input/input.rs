@@ -732,6 +732,7 @@ where
                 line_height: text::LineHeight::default(),
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
+                letter_spacing: None,
             });
 
             let Size { width, height } =
@@ -1164,6 +1165,7 @@ pub fn layout<Message>(
             line_height,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
+            letter_spacing: None,
         });
         let label_size = label_paragraph.min_bounds();
 
@@ -1301,6 +1303,7 @@ pub fn layout<Message>(
             line_height: helper_text_line_height,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
+            letter_spacing: None,
         });
         let helper_text_size = helper_text_paragraph.min_bounds();
         let helper_text_node = layout::Node::new(helper_text_size).translate(helper_pos);
@@ -2264,6 +2267,7 @@ pub fn draw<'a, Message>(
                 line_height,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
+                letter_spacing: None,
             },
             label_layout.bounds().position(),
             appearance.label_color,
@@ -2453,6 +2457,7 @@ pub fn draw<'a, Message>(
                 line_height: text::LineHeight::default(),
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
+                letter_spacing: None,
             },
             bounds.position(),
             color,
@@ -2501,6 +2506,7 @@ pub fn draw<'a, Message>(
                 line_height: helper_line_height,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
+                letter_spacing: None,
             },
             helper_text_layout.bounds().position(),
             text_color,
@@ -2881,6 +2887,7 @@ fn replace_paragraph(
         vertical_alignment: alignment::Vertical::Top,
         shaping: text::Shaping::Advanced,
         wrapping: text::Wrapping::None,
+        letter_spacing: None,
     });
 }
 
