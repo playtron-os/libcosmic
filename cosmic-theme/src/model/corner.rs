@@ -21,7 +21,7 @@ pub struct CornerRadii {
 }
 
 fn default_radius_window() -> [f32; 4] {
-    [22.0; 4]
+    [20.0; 4]
 }
 
 impl Default for CornerRadii {
@@ -33,7 +33,7 @@ impl Default for CornerRadii {
             radius_m: [16.0; 4],
             radius_l: [32.0; 4],
             radius_xl: [160.0; 4],
-            radius_window: [22.0; 4],
+            radius_window: [20.0; 4],
         }
     }
 }
