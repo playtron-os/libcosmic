@@ -801,18 +801,10 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     let cosmic = theme.cosmic();
                     let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
 
-                    // Translucent gradient: 5% white at top fading to transparent
-                    let base = Color::from_rgba(1.0, 1.0, 1.0, 0.05);
-                    let transparent = Color::from_rgba(1.0, 1.0, 1.0, 0.0);
-                    let gradient = iced::gradient::Linear::new(iced::Degrees(180.0))
-                        .add_stop(0.0, base)
-                        .add_stop(0.5, base)
-                        .add_stop(1.0, transparent);
-
                     iced_widget::container::Style {
                         icon_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
                         text_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                        background: Some(iced::Background::Gradient(gradient.into())),
+                        background: Some(iced::Background::Color(Color::WHITE)),
                         border: Border {
                             radius: [
                                 if sharp { 0.0 } else { window_radius[0] },
