@@ -721,9 +721,9 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         let header_height = Length::Fixed(47.0);
         let header_padding: Padding = Padding {
             top: 0.0,
-            right: 12.0,
+            right: 16.0,
             bottom: 0.0,
-            left: 12.0,
+            left: 16.0,
         };
 
         // Creates the headerbar widget.
@@ -973,7 +973,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         animated_container_bg(buttons)
             .background(bar_bg)
             .border_radius(radius)
-            .padding(Padding::from([2, 4]))
+            .padding(4)
             .apply(widget::container)
             .padding(iced::Padding::from([0, 0, 0, 18]))
             .center_y(Length::Fill)
