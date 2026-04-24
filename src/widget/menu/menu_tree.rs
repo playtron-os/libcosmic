@@ -149,8 +149,8 @@ where
             .height(Length::Fill)
             .width(Length::Fill),
     )
-    .height(Length::Fixed(36.0))
-    .padding([4, 16])
+    .height(Length::Shrink)
+    .padding([6, 12])
     .width(Length::Fill)
     .class(theme::Button::MenuItem)
 }
@@ -331,16 +331,12 @@ pub fn menu_items<
                                     .icon()
                                     .into(),
                             ])
-                            .class(
-                                // Menu folders have no on_press so they take on the disabled style by default
-                                if children.is_empty() {
-                                    // This will make the folder use the disabled style if it has no children
-                                    theme::Button::MenuItem
-                                } else {
-                                    // This will make the folder use the enabled style if it has children
-                                    theme::Button::MenuFolder
-                                },
-                            ),
+                            .force_enabled(!children.is_empty())
+                            .class(if children.is_empty() {
+                                theme::Button::MenuItem
+                            } else {
+                                theme::Button::MenuFolder
+                            }),
                         )),
                         menu_items(key_binds, children),
                     ));

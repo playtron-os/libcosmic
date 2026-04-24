@@ -478,7 +478,7 @@ where
             let positioner = SctkPositioner {
                 size: Some((
                     popup_size.width.ceil() as u32 + 2,
-                    popup_size.height.ceil() as u32 + 2,
+                    popup_size.height.ceil() as u32 + 8,
                 )),
                 anchor_rect,
                 anchor:

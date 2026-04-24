@@ -768,6 +768,21 @@ impl<'b, Message: Clone + 'static> Menu<'b, Message> {
                             || i == state.menu_states.len() - 1
                         {
                             view_cursor
+                        } else if let Some(active) = ms.index {
+                            // For non-last menus, fake the cursor to be over the active
+                            // path item so the button renders with hovered() style
+                            // (correct bg + text color). Other items won't see the cursor.
+                            if let Some(active_layout) = children_layout.children().nth(
+                                active.saturating_sub(
+                                    ms.slice(viewport_size, overlay_offset, self.item_height)
+                                        .start_index,
+                                ),
+                            ) {
+                                let b = active_layout.bounds();
+                                Cursor::Available(Point::new(b.x + 1.0, b.y + 1.0))
+                            } else {
+                                Cursor::Available([-1.0; 2].into())
+                            }
                         } else {
                             Cursor::Available([-1.0; 2].into())
                         };
@@ -795,7 +810,7 @@ impl<'b, Message: Clone + 'static> Menu<'b, Message> {
                                     width: styling.border_width,
                                     color: styling.border_color,
                                 },
-                                shadow: Shadow::default(),
+                                shadow: styling.shadow.last().copied().unwrap_or_default(),
                             };
                             let menu_color = styling.background;
                             r.fill_quad(menu_quad, menu_color);
@@ -811,7 +826,7 @@ impl<'b, Message: Clone + 'static> Menu<'b, Message> {
                                             .intersection(&viewport)
                                             .unwrap_or_default(),
                                         border: Border {
-                                            radius: styling.menu_border_radius.into(),
+                                            radius: [0.0; 4].into(),
                                             ..Default::default()
                                         },
                                         shadow: Shadow::default(),
@@ -1050,7 +1065,7 @@ impl<Message: std::clone::Clone + 'static> Widget<Message, crate::Theme, crate::
                 let mut positioner = SctkPositioner {
                     size: Some((
                         popup_size.width.ceil() as u32 + 2,
-                        popup_size.height.ceil() as u32 + 2,
+                        popup_size.height.ceil() as u32 + 8,
                     )),
                     anchor_rect,
                     anchor:

@@ -794,17 +794,16 @@ impl menu::Catalog for Theme {
     fn default<'a>() -> <Self as menu::Catalog>::Class<'a> {}
 
     fn style(&self, class: &<Self as menu::Catalog>::Class<'_>) -> menu::Style {
-        let cosmic = self.cosmic();
-
         menu::Style {
-            text_color: cosmic.on_bg_color().into(),
-            background: Background::Color(cosmic.background.base.into()),
+            text_color: Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0),
+            background: Background::Color(Color::WHITE),
             border: Border {
-                radius: cosmic.corner_radii.radius_m.into(),
-                ..Default::default()
+                radius: [8.0; 4].into(),
+                width: 1.0,
+                color: Color::from_rgba(0.0, 0.0, 0.0, 13.0 / 255.0),
             },
-            selected_text_color: cosmic.accent_text_color().into(),
-            selected_background: Background::Color(cosmic.background.component.hover.into()),
+            selected_text_color: Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0),
+            selected_background: Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0)),
         }
     }
 }

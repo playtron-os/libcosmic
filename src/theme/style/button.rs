@@ -141,12 +141,11 @@ pub fn appearance(
         }
         Button::MenuFolder => {
             // Menu folders cannot be disabled, ignore customized icon and text color
-            let component = &cosmic.background.component;
-            let (background, _, _) = color(component);
+            let (background, text, icon) = color(&cosmic.background.component);
             appearance.background = Some(Background::Color(background));
-            appearance.icon_color = Some(component.on.into());
-            appearance.text_color = Some(component.on.into());
-            corner_radii = &cosmic.corner_radii.radius_s;
+            appearance.icon_color = icon;
+            appearance.text_color = text;
+            corner_radii = &cosmic.corner_radii.radius_0;
         }
         Button::ListItem => {
             corner_radii = &[0.0; 4];
@@ -168,7 +167,7 @@ pub fn appearance(
             appearance.background = Some(Background::Color(background));
             appearance.icon_color = icon;
             appearance.text_color = text;
-            corner_radii = &cosmic.corner_radii.radius_s;
+            corner_radii = &cosmic.corner_radii.radius_0;
         }
         Button::MenuRoot => {
             appearance.background = None;
@@ -198,6 +197,14 @@ impl Catalog for crate::Theme {
         }
 
         appearance(self, focused, selected, false, style, move |component| {
+            if matches!(style, Button::MenuItem | Button::MenuFolder) {
+                // icetron: transparent bg, text_secondary (60% black)
+                return (
+                    Color::TRANSPARENT,
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                );
+            }
             let text_color = if matches!(
                 style,
                 Button::Icon | Button::IconVertical | Button::HeaderBar
@@ -244,6 +251,14 @@ impl Catalog for crate::Theme {
             false,
             style,
             |component| {
+                if matches!(style, Button::MenuItem | Button::MenuFolder) {
+                    // icetron: state_hovered_neutral bg (8% black), text_primary (87% black)
+                    return (
+                        Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0),
+                        Some(Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0)),
+                        Some(Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0)),
+                    );
+                }
                 let text_color = if matches!(
                     style,
                     Button::Icon | Button::IconVertical | Button::HeaderBar
@@ -265,6 +280,14 @@ impl Catalog for crate::Theme {
         }
 
         appearance(self, focused, selected, false, style, |component| {
+            if matches!(style, Button::MenuItem | Button::MenuFolder) {
+                // icetron: state_pressed_neutral bg (12% black), text_secondary
+                return (
+                    Color::from_rgba(0.0, 0.0, 0.0, 30.0 / 255.0),
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                );
+            }
             let text_color = if matches!(
                 style,
                 Button::Icon | Button::IconVertical | Button::HeaderBar

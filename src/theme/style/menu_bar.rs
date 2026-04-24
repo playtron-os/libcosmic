@@ -5,9 +5,10 @@ use std::sync::Arc;
 
 use crate::Theme;
 use iced_widget::core::Color;
+use iced_widget::core::Shadow;
 
 /// The appearance of a menu bar and its menus.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Appearance {
     /// The background color of the menu bar and its menus.
     pub background: Color,
@@ -23,6 +24,8 @@ pub struct Appearance {
     pub background_expand: [u16; 4],
     // /// The highlighted path [`Color`] of the the menu bar and its menus.
     pub path: Color,
+    /// The shadow layers of the menus.
+    pub shadow: Vec<Shadow>,
 }
 
 /// The style sheet of a menu bar and its menus.
@@ -67,15 +70,23 @@ impl StyleSheet for Theme {
         let component = &cosmic.background.component;
 
         match style {
-            MenuBarStyle::Default => Appearance {
-                background: component.base.into(),
-                border_width: 1.0,
-                bar_border_radius: cosmic.corner_radii.radius_xl,
-                menu_border_radius: cosmic.corner_radii.radius_s.map(|x| x + 2.0),
-                border_color: component.divider.into(),
-                background_expand: [1; 4],
-                path: component.hover.into(),
-            },
+            MenuBarStyle::Default => {
+                Appearance {
+                    background: Color::WHITE,
+                    border_width: 1.0,
+                    bar_border_radius: cosmic.corner_radii.radius_xl,
+                    menu_border_radius: [8.0; 4],
+                    border_color: Color::from_rgba(0.0, 0.0, 0.0, 13.0 / 255.0),
+                    // 4px top/bottom creates visual padding between items and
+                    // container edge. 1px left/right insets items from the border.
+                    // Popup surface is sized to accommodate the expand.
+                    background_expand: [4, 1, 4, 1],
+                    // Path highlight disabled; hover handled by fake cursor in menu_inner
+                    path: Color::TRANSPARENT,
+                    // No shadow — Wayland popup surfaces clip shadows at their bounds
+                    shadow: vec![],
+                }
+            }
             MenuBarStyle::Custom(c) => c.appearance(self),
         }
     }
