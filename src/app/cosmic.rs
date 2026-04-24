@@ -420,6 +420,12 @@ where
                 }
                 iced::Event::Window(window::Event::Focused) => return Some(Action::Focus(id)),
                 iced::Event::Window(window::Event::Unfocused) => return Some(Action::Unfocus(id)),
+                iced::Event::Mouse(iced::mouse::Event::CursorEntered) => {
+                    return Some(Action::WindowHovered(true));
+                }
+                iced::Event::Mouse(iced::mouse::Event::CursorLeft) => {
+                    return Some(Action::WindowHovered(false));
+                }
                 #[cfg(feature = "wayland")]
                 iced::Event::PlatformSpecific(iced::event::PlatformSpecific::Wayland(event)) => {
                     match event {
@@ -1204,7 +1210,13 @@ impl<T: Application> Cosmic<T> {
                 if core.focused_window().as_ref().is_some_and(|cur| *cur == id) {
                     core.focused_window.pop();
                 }
+                core.window_hovered = false;
             }
+
+            Action::WindowHovered(hovered) => {
+                self.app.core_mut().window_hovered = hovered;
+            }
+
             #[cfg(feature = "applet")]
             Action::SuggestedBounds(b) => {
                 tracing::info!("Suggested bounds: {b:?}");

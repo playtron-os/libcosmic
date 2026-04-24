@@ -739,6 +739,7 @@ impl slider::Catalog for Theme {
                         border_color: Color::TRANSPARENT,
                         border_width: 0.0,
                         background: Background::Color(cosmic.accent.base.into()),
+                        shadow: Default::default(),
                     },
 
                     breakpoint: slider::Breakpoint {

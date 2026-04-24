@@ -34,7 +34,7 @@ impl<Message: 'static + Clone> From<NavBarToggle<Message>> for Element<'_, Messa
         };
 
         widget::button::icon(widget::icon::from_name(icon))
-            .padding([8, 16])
+            .padding([8, 8])
             .on_press_maybe(nav_bar_toggle.on_toggle)
             .selected(nav_bar_toggle.selected)
             .class(nav_bar_toggle.class)

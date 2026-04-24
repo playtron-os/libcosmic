@@ -726,6 +726,7 @@ impl<App: Application> ApplicationExt for App {
                 Some({
                     let mut header = crate::widget::header_bar()
                         .focused(focused)
+                        .hovered(core.window_hovered)
                         .maximized(maximized)
                         .sharp_corners(sharp_corners)
                         .transparent(content_container)

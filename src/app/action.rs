@@ -64,6 +64,8 @@ pub enum Action {
     ToolkitConfig(CosmicTk),
     /// Window focus lost
     Unfocus(iced::window::Id),
+    /// Mouse cursor entered or left the window
+    WindowHovered(bool),
     /// Windowing system initialized
     WindowingSystemInitialized,
     /// Updates the window maximized state

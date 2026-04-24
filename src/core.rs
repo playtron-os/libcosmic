@@ -99,6 +99,9 @@ pub struct Core {
 
     pub(crate) menu_bars: HashMap<crate::widget::Id, (Limits, Size)>,
 
+    /// Whether the mouse cursor is currently over the window.
+    pub(crate) window_hovered: bool,
+
     #[cfg(feature = "wayland")]
     pub(crate) sync_window_border_radii_to_theme: bool,
 }
@@ -159,6 +162,7 @@ impl Default for Core {
             main_window: None,
             exit_on_main_window_closed: true,
             menu_bars: HashMap::new(),
+            window_hovered: false,
             #[cfg(feature = "wayland")]
             sync_window_border_radii_to_theme: true,
         }

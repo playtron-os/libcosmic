@@ -6,8 +6,318 @@ use crate::{Element, theme, widget};
 use apply::Apply;
 use derive_setters::Setters;
 use iced::{Border, Color, Length};
-use iced_core::{Vector, Widget, widget::tree};
+use iced_core::event;
+use iced_core::layout::{self, Layout};
+use iced_core::mouse::{self, Cursor};
+use iced_core::overlay;
+use iced_core::renderer;
+use iced_core::widget::{self as core_widget, Operation, Tree, tree};
+use iced_core::{Background, Clipboard, Event, Padding, Rectangle, Shell, Size, Vector, Widget};
 use std::borrow::Cow;
+use std::time::{Duration, Instant};
+
+// ── Animated container background ──────────────────────────────────────────────
+//
+// Minimal widget that wraps content and smoothly animates its background color
+// and border radius when they change. Used for the action bar pill in the header.
+
+const ACB_ANIMATION_DURATION: Duration = Duration::from_millis(150);
+const ACB_THRESHOLD: f32 = 0.001;
+const ACB_PROP_COUNT: usize = 5; // bg_r, bg_g, bg_b, bg_a, border_radius
+
+fn acb_pack(bg: Color, radius: f32) -> [f32; ACB_PROP_COUNT] {
+    [bg.r, bg.g, bg.b, bg.a, radius]
+}
+
+fn acb_differs(a: &[f32; ACB_PROP_COUNT], b: &[f32; ACB_PROP_COUNT]) -> bool {
+    a.iter()
+        .zip(b.iter())
+        .any(|(x, y)| (x - y).abs() > ACB_THRESHOLD)
+}
+
+fn acb_lerp(
+    from: &[f32; ACB_PROP_COUNT],
+    to: &[f32; ACB_PROP_COUNT],
+    t: f32,
+) -> [f32; ACB_PROP_COUNT] {
+    let mut out = [0.0; ACB_PROP_COUNT];
+    for i in 0..ACB_PROP_COUNT {
+        out[i] = from[i] + (to[i] - from[i]) * t;
+    }
+    out
+}
+
+/// Easeout cubic: 1 - (1 - t)^3
+fn ease_out(t: f32) -> f32 {
+    let inv = 1.0 - t;
+    1.0 - inv * inv * inv
+}
+
+#[derive(Default)]
+struct AcbState {
+    animation_start: Option<Instant>,
+    start: [f32; ACB_PROP_COUNT],
+    target: [f32; ACB_PROP_COUNT],
+    current: [f32; ACB_PROP_COUNT],
+    initialized: bool,
+}
+
+/// Create an animated container that transitions its background color.
+fn animated_container_bg<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> AnimatedContainerBg<'a, Message> {
+    AnimatedContainerBg {
+        content: content.into(),
+        target_bg: Color::TRANSPARENT,
+        target_border_radius: 0.0,
+        width: Length::Shrink,
+        height: Length::Shrink,
+        padding: Padding::ZERO,
+    }
+}
+
+struct AnimatedContainerBg<'a, Message> {
+    content: Element<'a, Message>,
+    target_bg: Color,
+    target_border_radius: f32,
+    width: Length,
+    height: Length,
+    padding: Padding,
+}
+
+impl<Message> AnimatedContainerBg<'_, Message> {
+    fn background(mut self, color: Color) -> Self {
+        self.target_bg = color;
+        self
+    }
+
+    fn border_radius(mut self, radius: f32) -> Self {
+        self.target_border_radius = radius;
+        self
+    }
+
+    fn padding(mut self, padding: impl Into<Padding>) -> Self {
+        self.padding = padding.into();
+        self
+    }
+}
+
+impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
+    for AnimatedContainerBg<'_, Message>
+{
+    fn tag(&self) -> core_widget::tree::Tag {
+        core_widget::tree::Tag::of::<AcbState>()
+    }
+
+    fn state(&self) -> core_widget::tree::State {
+        core_widget::tree::State::new(AcbState::default())
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_mut(&mut self.content));
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
+
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &crate::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let limits = limits.width(self.width).height(self.height);
+        let padding = self.padding;
+        let inner_limits = limits.shrink(padding);
+
+        let child = self
+            .content
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, &inner_limits);
+
+        let child_size = child.size();
+        let size = limits.resolve(
+            self.width,
+            self.height,
+            Size::new(
+                child_size.width + padding.left + padding.right,
+                child_size.height + padding.top + padding.bottom,
+            ),
+        );
+
+        layout::Node::with_children(
+            size,
+            vec![child.move_to(iced::Point::new(padding.left, padding.top))],
+        )
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &crate::Renderer,
+        operation: &mut dyn Operation<()>,
+    ) {
+        if let Some(child_layout) = layout.children().next() {
+            self.content.as_widget().operate(
+                &mut tree.children[0],
+                child_layout,
+                renderer,
+                operation,
+            );
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        tree: &mut Tree,
+        event: Event,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        renderer: &crate::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) -> event::Status {
+        let state = tree.state.downcast_mut::<AcbState>();
+
+        let new_target = acb_pack(self.target_bg, self.target_border_radius);
+
+        if !state.initialized {
+            state.initialized = true;
+            state.current = new_target;
+            state.target = new_target;
+            state.start = new_target;
+        }
+
+        if acb_differs(&state.target, &new_target) {
+            state.start = state.current;
+            state.target = new_target;
+            state.animation_start = Some(Instant::now());
+        }
+
+        if let Some(start) = state.animation_start {
+            let elapsed = start.elapsed();
+            if elapsed < ACB_ANIMATION_DURATION {
+                let progress =
+                    (elapsed.as_secs_f32() / ACB_ANIMATION_DURATION.as_secs_f32()).min(1.0);
+                let eased = ease_out(progress);
+                state.current = acb_lerp(&state.start, &state.target, eased);
+                shell.request_redraw(iced_core::window::RedrawRequest::NextFrame);
+            } else {
+                state.current = state.target;
+                state.animation_start = None;
+            }
+        }
+
+        if let Some(child_layout) = layout.children().next() {
+            self.content.as_widget_mut().on_event(
+                &mut tree.children[0],
+                event,
+                child_layout,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            )
+        } else {
+            event::Status::Ignored
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+        renderer: &crate::Renderer,
+    ) -> mouse::Interaction {
+        if let Some(child_layout) = layout.children().next() {
+            self.content.as_widget().mouse_interaction(
+                &tree.children[0],
+                child_layout,
+                cursor,
+                viewport,
+                renderer,
+            )
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut crate::Renderer,
+        theme: &crate::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+    ) {
+        let c = &tree.state.downcast_ref::<AcbState>().current;
+
+        let bg = Color::from_rgba(c[0], c[1], c[2], c[3]);
+        let border_radius = c[4];
+
+        iced_core::Renderer::fill_quad(
+            renderer,
+            renderer::Quad {
+                bounds: layout.bounds(),
+                border: Border {
+                    radius: border_radius.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Background::Color(bg),
+        );
+
+        if let Some(child_layout) = layout.children().next() {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                child_layout,
+                cursor,
+                viewport,
+            );
+        }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'_>,
+        renderer: &crate::Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
+        if let Some(child_layout) = layout.children().next() {
+            self.content.as_widget_mut().overlay(
+                &mut tree.children[0],
+                child_layout,
+                renderer,
+                translation,
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, Message: 'a + 'static> From<AnimatedContainerBg<'a, Message>> for Element<'a, Message> {
+    fn from(widget: AnimatedContainerBg<'a, Message>) -> Self {
+        Element::new(widget)
+    }
+}
 
 #[must_use]
 pub fn header_bar<'a, Message>() -> HeaderBar<'a, Message> {
@@ -24,6 +334,7 @@ pub fn header_bar<'a, Message>() -> HeaderBar<'a, Message> {
         end: Vec::new(),
         density: None,
         focused: false,
+        hovered: false,
         maximized: false,
         sharp_corners: false,
         is_ssd: false,
@@ -87,6 +398,9 @@ pub struct HeaderBar<'a, Message> {
 
     /// Focused state of the window
     focused: bool,
+
+    /// Hovered state of the window
+    hovered: bool,
 
     /// Maximized state of the window
     maximized: bool,
@@ -343,10 +657,10 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             std::mem::swap(&mut title, &mut self.title);
 
             let title_text: Element<'a, Message> = widget::text(title)
-                .size(15.0)
+                .size(14.0)
                 .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(20.0)))
                 .font(crate::font::medium())
-                .class(Color::from_rgb8(0x1B, 0x1B, 0x1B))
+                .class(Color::from_rgba8(0x1B, 0x1B, 0x1B, 1.0))
                 .into();
 
             let title_el: Element<'a, Message> = if let Some(icon_handle) = self.app_icon.take() {
@@ -404,10 +718,16 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             Some(spacer.into())
         };
 
-        let (header_height, header_padding) = (Length::Fixed(48.0), [8, 12, 8, 12]);
+        let header_height = Length::Fixed(47.0);
+        let header_padding: Padding = Padding {
+            top: 0.0,
+            right: 12.0,
+            bottom: 0.0,
+            left: 12.0,
+        };
 
         // Creates the headerbar widget.
-        let widget = widget::row::with_capacity(4)
+        let header_row = widget::row::with_capacity(4)
             // Start region: interactive elements (menu bar, nav toggle).
             .push(
                 widget::row::with_children(start)
@@ -443,20 +763,56 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             .align_y(iced::Alignment::Center)
             .height(header_height)
             .padding(header_padding)
-            .spacing(8)
+            .spacing(8);
+
+        // Apply opacity to all header content when unfocused and not hovered
+        let content_opacity = if self.focused || self.hovered {
+            1.0
+        } else {
+            0.8
+        };
+        let header_row: Element<'a, Message> =
+            iced::widget::opacity(content_opacity, header_row).into();
+
+        // Bottom border line
+        let border_line: Element<'a, Message> =
+            widget::container(iced::widget::Space::new(Length::Fill, Length::Fixed(0.0)))
+                .width(Length::Fill)
+                .height(Length::Fixed(1.0))
+                .class(crate::theme::Container::custom(|_theme| {
+                    iced_widget::container::Style {
+                        background: Some(iced::Background::Color(Color::from_rgba8(
+                            240, 240, 241, 1.0,
+                        ))),
+                        ..Default::default()
+                    }
+                }))
+                .into();
+
+        // Background: translucent gradient (matching icetron style)
+        let sharp = self.sharp_corners;
+        let explicit_radius = self.corner_radius;
+        let header_with_bg = widget::column::with_capacity(2)
+            .push(header_row)
+            .push(border_line)
             .apply(widget::container)
             .class({
-                let sharp = self.sharp_corners;
-                let explicit_radius = self.corner_radius;
                 crate::theme::Container::custom(move |theme| {
                     let cosmic = theme.cosmic();
                     let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
+
+                    // Translucent gradient: 5% white at top fading to transparent
+                    let base = Color::from_rgba(1.0, 1.0, 1.0, 0.05);
+                    let transparent = Color::from_rgba(1.0, 1.0, 1.0, 0.0);
+                    let gradient = iced::gradient::Linear::new(iced::Degrees(180.0))
+                        .add_stop(0.0, base)
+                        .add_stop(0.5, base)
+                        .add_stop(1.0, transparent);
+
                     iced_widget::container::Style {
                         icon_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
                         text_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                        background: Some(iced::Background::Color(Color::from_rgba8(
-                            255, 255, 255, 0.99,
-                        ))),
+                        background: Some(iced::Background::Gradient(gradient.into())),
                         border: Border {
                             radius: [
                                 if sharp { 0.0 } else { window_radius[0] },
@@ -473,22 +829,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             })
             .center_y(Length::Shrink);
 
-        let widget = {
-            use iced::widget::{horizontal_rule, rule};
-            widget::column::with_capacity(2)
-                .push(widget)
-                .push(
-                    horizontal_rule(1).class(crate::theme::Rule::Custom(Box::new(
-                        |_: &crate::Theme| rule::Style {
-                            color: Color::from_rgba8(240, 240, 241, 1.0),
-                            width: 1,
-                            radius: 0.0.into(),
-                            fill_mode: rule::FillMode::Full,
-                        },
-                    ))),
-                )
-                .apply(widget::mouse_area)
-        };
+        let widget = header_with_bg.apply(widget::mouse_area);
 
         let mut widget = widget;
 
@@ -507,56 +848,132 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         const ICON_RESTORE: &[u8] = include_bytes!("../../res/icons/window-restore.svg");
         const ICON_CLOSE: &[u8] = include_bytes!("../../res/icons/window-close.svg");
 
-        macro_rules! icon {
-            ($svg_bytes:expr, $size:expr, $on_press:expr) => {{
-                let padding = [6, 6];
-                let icon_w = widget::icon::icon(widget::icon::from_svg_bytes($svg_bytes))
-                    .size($size)
-                    .class(crate::theme::Svg::custom(|_| iced::widget::svg::Style {
-                        color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                    }));
-                let result: Element<'a, Message> = widget::button::custom(icon_w)
-                    .padding(padding)
-                    .class(crate::theme::Button::HeaderBar)
-                    .selected(self.focused)
-                    .on_press($on_press)
-                    .into();
+        // Matches icetron: fill_skim() = rgba(0, 0, 0, 102) = 40% black
+        let icon_color = Color::from_rgba(0.0, 0.0, 0.0, 0.4);
+        // Matches icetron: ui_size_icon_2xs = 14, ui_size_icon_2md = 28
+        let icon_size: u16 = 14;
+        let button_size = 28.0;
+        let radius = 9999.0_f32; // radii_max
+
+        // Ghost button style for minimize/maximize
+        let ghost_button_style = || {
+            let hover_bg = Color::from_rgba(0.0, 0.0, 0.0, 0.08);
+            let pressed_bg = Color::from_rgba(0.0, 0.0, 0.0, 0.12);
+            crate::theme::Button::Custom {
+                active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: None,
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                disabled: Box::new(move |_theme| crate::widget::button::Style {
+                    background: None,
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                hovered: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: Some(iced::Background::Color(hover_bg)),
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                pressed: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: Some(iced::Background::Color(pressed_bg)),
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+            }
+        };
+
+        // Destructive close button: red icon + red bg on hover
+        let close_button_style = || {
+            // Matches icetron: feedback_error_primary = #FF3B30
+            let error_color = Color::from_rgb8(0xFF, 0x3B, 0x30);
+            // Matches icetron: feedback_error_tertiary = rgba(255, 59, 48, 26) ≈ 10% red
+            let error_bg = Color::from_rgba8(0xFF, 0x3B, 0x30, 26.0 / 255.0);
+            crate::theme::Button::Custom {
+                active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: None,
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                disabled: Box::new(move |_theme| crate::widget::button::Style {
+                    background: None,
+                    icon_color: Some(icon_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                hovered: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: Some(iced::Background::Color(error_bg)),
+                    icon_color: Some(error_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+                pressed: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                    background: Some(iced::Background::Color(error_bg)),
+                    icon_color: Some(error_color),
+                    border_radius: radius.into(),
+                    ..crate::widget::button::Style::new()
+                }),
+            }
+        };
+
+        macro_rules! ghost_icon {
+            ($svg_bytes:expr, $on_press:expr, $style:expr) => {{
+                let handle = widget::icon::from_svg_bytes($svg_bytes).symbolic(true);
+                let icon_w = widget::icon::icon(handle)
+                    .size(icon_size)
+                    .content_fit(iced::ContentFit::Contain);
+                let result: Element<'a, Message> = widget::button::custom(
+                    widget::container(icon_w)
+                        .center_x(Length::Fixed(button_size))
+                        .center_y(Length::Fixed(button_size)),
+                )
+                .padding(0)
+                .width(Length::Fixed(button_size))
+                .height(Length::Fixed(button_size))
+                .class($style)
+                .on_press($on_press)
+                .into();
                 result
             }};
         }
 
-        let icon_spacing = 2;
-
-        widget::row::with_capacity(3)
+        // Action bar pill: rounded container around buttons
+        let buttons = widget::row::with_capacity(3)
             .push_maybe(
                 self.on_minimize
                     .take()
-                    .map(|m: Message| icon!(ICON_MINIMIZE, 16, m)),
+                    .map(|m: Message| ghost_icon!(ICON_MINIMIZE, m, ghost_button_style())),
             )
             .push_maybe(self.on_maximize.take().map(|m| {
                 if self.maximized {
-                    icon!(ICON_RESTORE, 16, m)
+                    ghost_icon!(ICON_RESTORE, m, ghost_button_style())
                 } else {
-                    icon!(ICON_MAXIMIZE, 16, m)
+                    ghost_icon!(ICON_MAXIMIZE, m, ghost_button_style())
                 }
             }))
-            .push_maybe(self.on_close.take().map(|m| icon!(ICON_CLOSE, 16, m)))
-            .spacing(icon_spacing)
-            .apply(widget::container)
-            .class(crate::theme::Container::custom(move |theme| {
-                let cosmic = theme.cosmic();
-                let background = Color::from_rgba8(0xFF, 0xFF, 0xFF, 0.80);
-                iced_widget::container::Style {
-                    background: Some(iced::Background::Color(background)),
-                    border: Border {
-                        radius: cosmic.corner_radii.radius_xl.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }
-            }))
-            .padding([2, 8])
-            .center_y(Length::Fill)
+            .push_maybe(
+                self.on_close
+                    .take()
+                    .map(|m| ghost_icon!(ICON_CLOSE, m, close_button_style())),
+            )
+            .spacing(2)
+            .align_y(iced::Alignment::Center);
+
+        // Wrap in animated_container_bg for smooth pill bg transitions
+        let bar_bg = if self.focused || self.hovered {
+            Color::from_rgba(0.0, 0.0, 0.0, 0.03)
+        } else {
+            Color::TRANSPARENT
+        };
+        animated_container_bg(buttons)
+            .background(bar_bg)
+            .border_radius(radius)
+            .padding(Padding::from([2, 4]))
             .apply(widget::container)
             .padding(iced::Padding::from([0, 0, 0, 18]))
             .center_y(Length::Fill)
