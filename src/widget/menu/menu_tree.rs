@@ -339,7 +339,7 @@ pub fn menu_items<
                 MenuItem::Divider => {
                     if i != size - 1 {
                         trees.push(MenuTree::<Message>::from(Element::from(
-                            widget::container(widget::divider::horizontal::light()).padding([4, 0]),
+                            iced::widget::horizontal_rule(9).class(theme::Rule::LightDivider),
                         )));
                     }
                 }
