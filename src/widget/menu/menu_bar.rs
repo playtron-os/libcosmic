@@ -226,7 +226,7 @@ where
             },
             item_width: ItemWidth::Uniform(150),
             item_height: ItemHeight::Uniform(30),
-            path_highlight: Some(PathHighlight::Full),
+            path_highlight: Some(PathHighlight::OmitActive),
             menu_roots,
             style: <crate::Theme as StyleSheet>::Style::default(),
             window_id: window::Id::NONE,
