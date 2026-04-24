@@ -81,8 +81,8 @@ impl StyleSheet for Theme {
                     // container edge. 1px left/right insets items from the border.
                     // Popup surface is sized to accommodate the expand.
                     background_expand: [4, 1, 4, 1],
-                    // Path highlight disabled; hover handled by fake cursor in menu_inner
-                    path: Color::TRANSPARENT,
+                    // Path highlight for active folder item (8% black, matches hover bg)
+                    path: Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0),
                     // No shadow — Wayland popup surfaces clip shadows at their bounds
                     shadow: vec![],
                 }

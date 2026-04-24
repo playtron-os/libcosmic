@@ -768,21 +768,6 @@ impl<'b, Message: Clone + 'static> Menu<'b, Message> {
                             || i == state.menu_states.len() - 1
                         {
                             view_cursor
-                        } else if let Some(active) = ms.index {
-                            // For non-last menus, fake the cursor to be over the active
-                            // path item so the button renders with hovered() style
-                            // (correct bg + text color). Other items won't see the cursor.
-                            if let Some(active_layout) = children_layout.children().nth(
-                                active.saturating_sub(
-                                    ms.slice(viewport_size, overlay_offset, self.item_height)
-                                        .start_index,
-                                ),
-                            ) {
-                                let b = active_layout.bounds();
-                                Cursor::Available(Point::new(b.x + 1.0, b.y + 1.0))
-                            } else {
-                                Cursor::Available([-1.0; 2].into())
-                            }
                         } else {
                             Cursor::Available([-1.0; 2].into())
                         };

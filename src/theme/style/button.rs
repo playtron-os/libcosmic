@@ -225,6 +225,14 @@ impl Catalog for crate::Theme {
         }
 
         appearance(self, false, false, true, style, |component| {
+            if matches!(style, Button::MenuFolder) {
+                // Menu folders have no on_press; use text_secondary to match MenuItem active
+                return (
+                    Color::TRANSPARENT,
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
+                );
+            }
             let mut background = Color::from(component.base);
             background.a *= 0.5;
             (

@@ -149,7 +149,7 @@ where
             .height(Length::Fill)
             .width(Length::Fill),
     )
-    .height(Length::Shrink)
+    .height(Length::Fixed(32.0))
     .padding([6, 12])
     .width(Length::Fill)
     .class(theme::Button::MenuItem)
@@ -331,12 +331,7 @@ pub fn menu_items<
                                     .icon()
                                     .into(),
                             ])
-                            .force_enabled(!children.is_empty())
-                            .class(if children.is_empty() {
-                                theme::Button::MenuItem
-                            } else {
-                                theme::Button::MenuFolder
-                            }),
+                            .class(theme::Button::MenuFolder),
                         )),
                         menu_items(key_binds, children),
                     ));
@@ -344,7 +339,7 @@ pub fn menu_items<
                 MenuItem::Divider => {
                     if i != size - 1 {
                         trees.push(MenuTree::<Message>::from(Element::from(
-                            widget::divider::horizontal::light(),
+                            widget::container(widget::divider::horizontal::light()).padding([4, 0]),
                         )));
                     }
                 }
