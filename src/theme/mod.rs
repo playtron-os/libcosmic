@@ -153,11 +153,12 @@ pub fn system_preference() -> Theme {
     let Ok(is_dark) = ThemeMode::is_dark(&mode_config) else {
         return Theme::dark();
     };
-    if is_dark {
-        system_dark()
-    } else {
-        system_light()
-    }
+    let mut theme = if is_dark { system_dark() } else { system_light() };
+    // The per-theme `is_dark` flag is not persisted in cosmic-config, so the
+    // loaded theme can't be trusted to report dark/light correctly. Record the
+    // preference we just read from `ThemeMode` so `is_dark()` reflects config.
+    theme.theme_type.prefer_dark(Some(is_dark));
+    theme
 }
 
 #[must_use]
@@ -183,6 +184,12 @@ impl ThemeType {
         match self {
             Self::Dark | Self::HighContrastDark => true,
             Self::Light | Self::HighContrastLight => false,
+            // An explicit preference (set from config or by the application)
+            // wins over the loaded theme's `is_dark`, which is not persisted.
+            Self::System {
+                prefer_dark: Some(prefer_dark),
+                ..
+            } => *prefer_dark,
             Self::Custom(theme) | Self::System { theme, .. } => theme.is_dark,
         }
     }
