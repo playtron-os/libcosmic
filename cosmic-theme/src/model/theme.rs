@@ -1,13 +1,13 @@
+use crate::composite::over;
+use crate::steps::{color_index, get_small_widget_color, get_surface_color, get_text, steps};
 use crate::{
     Component, Container, CornerRadii, CosmicPalette, CosmicPaletteInner, DARK_PALETTE,
     LIGHT_PALETTE, NAME, Spacing, ThemeMode,
-    composite::over,
-    steps::{color_index, get_small_widget_color, get_surface_color, get_text, steps},
 };
 use cosmic_config::{Config, CosmicConfigEntry};
-use palette::{
-    IntoColor, Oklcha, Srgb, Srgba, WithAlpha, color_difference::Wcag21RelativeContrast, rgb::Rgb,
-};
+use palette::color_difference::Wcag21RelativeContrast;
+use palette::rgb::Rgb;
+use palette::{IntoColor, Oklcha, Srgb, Srgba, WithAlpha};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
@@ -75,6 +75,8 @@ pub struct Theme {
     pub icon_button: Component,
     /// link button element colors
     pub link_button: Component,
+    /// list button element colors
+    pub list_button: Component,
     /// text button element colors
     pub text_button: Component,
     /// button component styling
@@ -703,18 +705,17 @@ impl Theme {
         self.shade
     }
 
-    /// get the active theme
+    /// Get the active theme based on the current theme mode.
     pub fn get_active() -> Result<Self, (Vec<cosmic_config::Error>, Self)> {
-        let config =
-            Config::new(Self::id(), Self::VERSION).map_err(|e| (vec![e], Self::default()))?;
-        let is_dark = ThemeMode::is_dark(&config).map_err(|e| (vec![e], Self::default()))?;
-        let config = if is_dark {
-            Self::dark_config()
-        } else {
-            Self::light_config()
-        }
-        .map_err(|e| (vec![e], Self::default()))?;
-        Self::get_entry(&config)
+        (|| {
+            (if ThemeMode::is_dark(&Config::new(Self::id(), Self::VERSION)?)? {
+                Self::dark_config
+            } else {
+                Self::light_config
+            })()
+        })()
+        .map_err(|error| (vec![error], Self::default()))
+        .and_then(|theme_config| Self::get_entry(&theme_config))
     }
 
     #[must_use]
@@ -1005,19 +1006,19 @@ impl ThemeBuilder {
         let success = if let Some(success) = success {
             success.into_color()
         } else {
-            palette.as_ref().accent_green
+            palette.as_ref().bright_green
         };
 
         let warning = if let Some(warning) = warning {
             warning.into_color()
         } else {
-            palette.as_ref().accent_yellow
+            palette.as_ref().bright_orange
         };
 
         let destructive = if let Some(destructive) = destructive {
             destructive.into_color()
         } else {
-            palette.as_ref().accent_red
+            palette.as_ref().bright_red
         };
 
         let text_steps_array = text_tint.map(|c| steps(c, NonZeroUsize::new(100).unwrap()));
@@ -1304,6 +1305,15 @@ impl ThemeBuilder {
                 component.on_disabled = over(component.on.with_alpha(0.5), component.base);
                 component
             },
+            list_button: Component::component(
+                Srgba::new(0.0, 0.0, 0.0, 0.0),
+                accent,
+                on_bg_component,
+                Srgba::new(0.0, 0.0, 0.0, 0.0),
+                button_pressed_overlay,
+                is_high_contrast,
+                control_steps_array[8],
+            ),
             success: Component::colored_component(
                 success,
                 control_steps_array[0],

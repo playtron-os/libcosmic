@@ -7,13 +7,11 @@ use std::collections::HashMap;
 use std::{env, process};
 
 use cosmic::app::{Core, Settings, Task};
-use cosmic::iced::window;
-use cosmic::iced_core::alignment::{Horizontal, Vertical};
-use cosmic::iced_core::keyboard::Key;
-use cosmic::iced_core::{Length, Size};
+use cosmic::iced::alignment::{Horizontal, Vertical};
+use cosmic::iced::keyboard::Key;
+use cosmic::iced::{window, Length, Size};
 use cosmic::widget::menu::action::MenuAction;
-use cosmic::widget::menu::key_bind::KeyBind;
-use cosmic::widget::menu::key_bind::Modifier;
+use cosmic::widget::menu::key_bind::{KeyBind, Modifier};
 use cosmic::widget::menu::{self, ItemHeight, ItemWidth};
 use cosmic::widget::RcElementWrapper;
 use cosmic::{executor, Element};

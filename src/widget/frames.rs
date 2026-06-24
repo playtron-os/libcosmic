@@ -2,21 +2,20 @@
 //! Based on <https://github.com/tarkah/iced_gif/>
 
 use std::ffi::OsStr;
-use std::fmt;
-use std::io;
 use std::path::Path;
 use std::time::{Duration, Instant};
+use std::{fmt, io};
 
 use ::image as image_rs;
+use iced::{Task, mouse};
 use iced_core::image::Renderer as ImageRenderer;
 use iced_core::mouse::Cursor;
 use iced_core::widget::{Tree, tree};
 use iced_core::{
-    Clipboard, ContentFit, Element, Event, Layout, Length, Rectangle, Shell, Size, Vector, Widget,
-    event, layout, renderer, window,
+    Clipboard, ContentFit, Element, Event, Layout, Length, Rectangle, Rotation, Shell, Size,
+    Widget, event, layout, renderer, window,
 };
-use iced_runtime::Command;
-use iced_widget::image::{self, Handle};
+use iced_widget::image::{self, FilterMethod, Handle};
 use image_rs::AnimationDecoder;
 use image_rs::codecs::gif::GifDecoder;
 use image_rs::codecs::png::PngDecoder;
@@ -27,7 +26,7 @@ use iced_futures::futures::{AsyncRead, AsyncReadExt};
 #[cfg(feature = "tokio")]
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use super::icon::load_icon;
+use crate::widget::icon;
 
 #[must_use]
 /// Creates a new [`AnimatedImage`] with the given [`animated_image::Frames`]
@@ -74,13 +73,13 @@ impl Frames {
         size: u16,
         theme: Option<&str>,
         default_fallbacks: bool,
-    ) -> Command<Result<Frames, Error>> {
+    ) -> Task<Result<Frames, Error>> {
         let mut name_path_buffer = None;
-        if let Some(path) = load_icon(name, size, theme) {
+        if let Some(path) = icon::Named::new(name).size(size).path() {
             name_path_buffer = Some(path);
         } else if default_fallbacks {
             for name in name.rmatch_indices('-').map(|(pos, _)| &name[..pos]) {
-                if let Some(path) = load_icon(name, size, theme) {
+                if let Some(path) = icon::Named::new(name).size(size).path() {
                     name_path_buffer = Some(path);
                     break;
                 }
@@ -90,14 +89,14 @@ impl Frames {
         if let Some(name_path_buffer) = name_path_buffer {
             Self::load_from_path(name_path_buffer)
         } else {
-            Command::perform(async { Err(Error::Missing) }, std::convert::identity)
+            Task::perform(async { Err(Error::Missing) }, std::convert::identity)
         }
     }
 
     /// Load [`Frames`] from the supplied path
-    pub fn load_from_path(path: impl AsRef<Path>) -> Command<Result<Frames, Error>> {
+    pub fn load_from_path(path: impl AsRef<Path>) -> Task<Result<Frames, Error>> {
         #[inline(never)]
-        fn inner(path: &Path) -> Command<Result<Frames, Error>> {
+        fn inner(path: &Path) -> Task<Result<Frames, Error>> {
             #[cfg(feature = "tokio")]
             use tokio::fs::File;
             #[cfg(feature = "tokio")]
@@ -108,7 +107,7 @@ impl Frames {
             #[cfg(not(feature = "tokio"))]
             use iced_futures::futures::io::BufReader;
 
-            let path = path.as_ref().to_path_buf();
+            let path = path.to_path_buf();
 
             let f = async move {
                 let image_type = match &path.extension() {
@@ -119,10 +118,10 @@ impl Frames {
                 };
                 let reader = BufReader::new(File::open(path).await?);
 
-                Self::from_reader(reader, image_type).await
+                Frames::from_reader(reader, image_type).await
             };
 
-            Command::perform(f, std::convert::identity)
+            Task::perform(f, std::convert::identity)
         }
 
         inner(path.as_ref())
@@ -145,7 +144,7 @@ impl Frames {
 
         match image_type {
             ImageType::Gif => Self::from_decoder(GifDecoder::new(io::Cursor::new(bytes))?),
-            ImageType::Apng => Self::from_decoder(PngDecoder::new(io::Cursor::new(bytes))?.apng()),
+            ImageType::Apng => Self::from_decoder(PngDecoder::new(io::Cursor::new(bytes))?.apng()?),
             ImageType::WebP => Self::from_decoder(WebPDecoder::new(io::Cursor::new(bytes))?),
         }
     }
@@ -167,10 +166,10 @@ impl Frames {
         let first = frames.first().cloned().unwrap();
         let total_bytes = frames
             .iter()
-            .map(|f| match f.handle.data() {
-                iced_core::image::Data::Path(_) => 0,
-                iced_core::image::Data::Bytes(b) => b.len(),
-                iced_core::image::Data::Rgba { pixels, .. } => pixels.len(),
+            .map(|f| match &f.handle {
+                Handle::Path(..) => 0,
+                Handle::Bytes(_, b) => b.len(),
+                Handle::Rgba { pixels, .. } => pixels.len(),
             })
             .sum::<usize>()
             .try_into()
@@ -195,7 +194,7 @@ impl From<image_rs::Frame> for Frame {
 
         let delay = frame.delay().into();
 
-        let handle = image::Handle::from_pixels(width, height, frame.into_buffer().into_vec());
+        let handle = image::Handle::from_rgba(width, height, frame.into_buffer().into_vec());
 
         Self { delay, handle }
     }
@@ -278,12 +277,8 @@ impl<'a, Message, Renderer> Widget<Message, crate::Theme, Renderer> for Animated
 where
     Renderer: ImageRenderer<Handle = Handle>,
 {
-    fn width(&self) -> Length {
-        self.width
-    }
-
-    fn height(&self) -> Length {
-        self.height
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width.into(), self.height.into())
     }
 
     fn tag(&self) -> tree::Tag {
@@ -315,30 +310,40 @@ where
         }
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         iced_widget::image::layout(
             renderer,
             limits,
             &self.frames.first.handle,
             self.width,
             self.height,
+            None,
             self.content_fit,
+            Rotation::default(),
+            false,
+            [0.0; 4],
         )
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
-        _layout: Layout<'_>,
-        _cursor_position: Cursor,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor_position: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
-    ) -> event::Status {
+        viewport: &Rectangle,
+    ) {
         let state = tree.state.downcast_mut::<State>();
 
-        if let Event::Window(_, window::Event::RedrawRequested(now)) = event {
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
             let elapsed = now.duration_since(state.current.started);
 
             if elapsed > state.current.frame.delay {
@@ -346,15 +351,14 @@ where
 
                 state.current = self.frames.frames[state.index].clone().into();
 
-                shell.request_redraw(window::RedrawRequest::At(now + state.current.frame.delay));
+                shell
+                    .request_redraw_at(window::RedrawRequest::At(*now + state.current.frame.delay));
             } else {
                 let remaining = state.current.frame.delay - elapsed;
 
-                shell.request_redraw(window::RedrawRequest::At(now + remaining));
+                shell.request_redraw_at(window::RedrawRequest::At(*now + remaining));
             }
         }
-
-        event::Status::Ignored
     }
 
     fn draw(
@@ -369,37 +373,18 @@ where
     ) {
         let state = tree.state.downcast_ref::<State>();
 
-        // Pulled from iced_native::widget::<Image as Widget>::draw
-        //
-        // TODO: export iced_native::widget::image::draw as standalone function
-        {
-            let Size { width, height } = renderer.dimensions(&state.current.frame.handle);
-            let image_size = Size::new(width as f32, height as f32);
-
-            let bounds = layout.bounds();
-            let adjusted_fit = self.content_fit.fit(image_size, bounds.size());
-
-            let render = |renderer: &mut Renderer| {
-                let offset = Vector::new(
-                    (bounds.width - adjusted_fit.width).max(0.0) / 2.0,
-                    (bounds.height - adjusted_fit.height).max(0.0) / 2.0,
-                );
-
-                let drawing_bounds = Rectangle {
-                    width: adjusted_fit.width,
-                    height: adjusted_fit.height,
-                    ..bounds
-                };
-
-                renderer.draw(state.current.frame.handle.clone(), drawing_bounds + offset);
-            };
-
-            if adjusted_fit.width > bounds.width || adjusted_fit.height > bounds.height {
-                renderer.with_layer(bounds, render);
-            } else {
-                render(renderer);
-            }
-        }
+        iced_widget::image::draw(
+            renderer,
+            layout,
+            &state.current.frame.handle,
+            None,
+            iced_core::border::Radius::default(),
+            self.content_fit,
+            FilterMethod::default(),
+            Rotation::default(),
+            1.0,
+            1.0,
+        );
     }
 }
 

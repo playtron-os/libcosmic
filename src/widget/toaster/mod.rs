@@ -6,16 +6,13 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use crate::widget::Column;
-use crate::widget::container;
+use crate::widget::{Column, container};
 use iced::Task;
 use iced_core::Element;
-use slotmap::SlotMap;
-use slotmap::new_key_type;
+use slotmap::{SlotMap, new_key_type};
 use widget::Toaster;
 
-use super::column;
-use super::{button, icon, row, text};
+use super::{button, column, icon, row, text};
 
 mod widget;
 
@@ -34,10 +31,10 @@ pub fn toaster<'a, Message: Clone + 'static>(
     } = theme.cosmic().spacing;
 
     let make_toast = move |(id, toast): (ToastId, &'a Toast<Message>)| {
-        let row = row()
+        let row = row::with_capacity(2)
             .push(text(&toast.message))
             .push(
-                row()
+                row::with_capacity(2)
                     .push_maybe(toast.action.as_ref().map(|action| {
                         button::text(&action.description).on_press((action.message)(id))
                     }))

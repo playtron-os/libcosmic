@@ -4,16 +4,14 @@
 use iced::{Limits, Size};
 use iced_core::layout::Node;
 
-use iced_core::Element;
-use iced_core::Overlay;
 use iced_core::event::{self, Event};
-use iced_core::layout;
-use iced_core::mouse;
-use iced_core::overlay;
 use iced_core::renderer::{self};
 use iced_core::widget::Operation;
 use iced_core::widget::tree::Tree;
-use iced_core::{Clipboard, Layout, Length, Point, Rectangle, Shell, Vector, Widget};
+use iced_core::{
+    Clipboard, Element, Layout, Length, Overlay, Point, Rectangle, Shell, Vector, Widget, layout,
+    mouse, overlay,
+};
 
 pub struct Toaster<'a, Message, Theme, Renderer> {
     toasts: Element<'a, Message, Theme, Renderer>,
@@ -45,13 +43,13 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.content
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits)
     }
 
@@ -85,29 +83,29 @@ where
     }
 
     fn operate<'b>(
-        &'b self,
+        &'b mut self,
         state: &'b mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         operation: &mut dyn Operation<()>,
     ) {
         self.content
-            .as_widget()
+            .as_widget_mut()
             .operate(&mut state.children[0], layout, renderer, operation);
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         state: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        self.content.as_widget_mut().on_event(
+    ) {
+        self.content.as_widget_mut().update(
             &mut state.children[0],
             event,
             layout,
@@ -139,8 +137,9 @@ where
     fn overlay<'b>(
         &'b mut self,
         state: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
         //TODO: this hides the overlay of the content during the toast
@@ -149,6 +148,7 @@ where
                 &mut state.children[0],
                 layout,
                 renderer,
+                viewport,
                 translation,
             )
         } else {
@@ -201,7 +201,7 @@ where
 
         let node = self
             .element
-            .as_widget()
+            .as_widget_mut()
             .layout(self.state, renderer, &limits);
 
         let offset = 15.;
@@ -228,16 +228,16 @@ where
             .draw(self.state, renderer, theme, style, layout, cursor, &bounds);
     }
 
-    fn on_event(
+    fn update(
         &mut self,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<Message>,
-    ) -> event::Status {
-        self.element.as_widget_mut().on_event(
+    ) {
+        self.element.as_widget_mut().update(
             self.state,
             event,
             layout,
@@ -246,29 +246,36 @@ where
             clipboard,
             shell,
             &layout.bounds(),
-        )
+        );
     }
 
     fn mouse_interaction(
         &self,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.element
-            .as_widget()
-            .mouse_interaction(self.state, layout, cursor, viewport, renderer)
+        self.element.as_widget().mouse_interaction(
+            self.state,
+            layout,
+            cursor,
+            &layout.bounds(),
+            renderer,
+        )
     }
 
     fn overlay<'c>(
         &'c mut self,
-        layout: Layout<'_>,
+        layout: Layout<'c>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'c, Message, Theme, Renderer>> {
-        self.element
-            .as_widget_mut()
-            .overlay(self.state, layout, renderer, Default::default())
+        self.element.as_widget_mut().overlay(
+            self.state,
+            layout,
+            renderer,
+            &layout.bounds(),
+            Default::default(),
+        )
     }
 }
 

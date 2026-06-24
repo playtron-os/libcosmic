@@ -1,11 +1,12 @@
-use crate::{Component, Theme, composite::over, steps::steps};
-use palette::{Darken, IntoColor, Lighten, Srgba, WithAlpha, rgb::Rgba};
-use std::{
-    fs::{self, File},
-    io::{self, Write},
-    num::NonZeroUsize,
-    path::Path,
-};
+use crate::composite::over;
+use crate::steps::steps;
+use crate::{Component, Theme};
+use palette::rgb::Rgba;
+use palette::{Darken, IntoColor, Lighten, Srgba, WithAlpha};
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::num::NonZeroUsize;
+use std::path::Path;
 
 use super::{OutputError, to_rgba};
 
@@ -163,9 +164,19 @@ impl Theme {
             std::fs::create_dir_all(&config_dir).map_err(OutputError::Io)?;
         }
 
-        let mut file = File::create(config_dir.join(name)).map_err(OutputError::Io)?;
-        file.write_all(css_str.as_bytes())
-            .map_err(OutputError::Io)?;
+        let file_path = config_dir.join(name);
+        let tmp_file_path = config_dir.join(name.to_owned() + "~");
+
+        // Write to tmp_file_path first, then move it to file_path
+        let mut tmp_file = File::create(&tmp_file_path).map_err(OutputError::Io)?;
+        let res = tmp_file
+            .write_all(css_str.as_bytes())
+            .and_then(|_| tmp_file.flush())
+            .and_then(|_| std::fs::rename(&tmp_file_path, file_path));
+        if let Err(e) = res {
+            _ = std::fs::remove_file(&tmp_file_path);
+            return Err(OutputError::Io(e));
+        }
 
         Ok(())
     }

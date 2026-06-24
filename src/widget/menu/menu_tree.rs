@@ -9,11 +9,11 @@ use std::rc::Rc;
 use iced::advanced::widget::text::Style as TextStyle;
 use iced_widget::core::{Element, renderer};
 
-use crate::iced_core::{Alignment, Length};
 use crate::widget::menu::action::MenuAction;
 use crate::widget::menu::key_bind::KeyBind;
 use crate::widget::{Button, RcElementWrapper, icon};
 use crate::{theme, widget};
+use iced_core::{Alignment, Length};
 
 /// Nested menu is essentially a tree of items, a menu is a collection of items
 /// a menu itself can also be an item of another menu.
@@ -234,6 +234,7 @@ pub fn menu_items<
         color.alpha *= 0.75;
         TextStyle {
             color: Some(color.into()),
+            ..Default::default()
         }
     }
     let key_class = theme::Text::Custom(key_style);
@@ -252,14 +253,26 @@ pub fn menu_items<
                     let l: Cow<'static, str> = label.into();
                     let key = find_key(&action, key_binds);
                     let mut items = vec![
-                        widget::text(l).into(),
-                        widget::horizontal_space().into(),
-                        widget::text(key).class(key_class).into(),
+                        widget::text(l)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .into(),
+                        widget::space::horizontal().into(),
+                        widget::text(key)
+                            .class(key_class)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .into(),
                     ];
 
                     if let Some(icon) = icon {
                         items.insert(0, widget::icon::icon(icon).size(14).into());
-                        items.insert(1, widget::Space::with_width(spacing.space_xxs).into());
+                        items.insert(
+                            1,
+                            widget::space::horizontal().width(spacing.space_xxs).into(),
+                        );
                     }
 
                     let menu_button = menu_button(items).on_press(action.message());
@@ -272,14 +285,26 @@ pub fn menu_items<
                     let key = find_key(&action, key_binds);
 
                     let mut items = vec![
-                        widget::text(l).into(),
-                        widget::horizontal_space().into(),
-                        widget::text(key).class(key_class).into(),
+                        widget::text(l)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .into(),
+                        widget::space::horizontal().into(),
+                        widget::text(key)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .class(key_class)
+                            .into(),
                     ];
 
                     if let Some(icon) = icon {
                         items.insert(0, widget::icon::icon(icon).size(14).into());
-                        items.insert(1, widget::Space::with_width(spacing.space_xxs).into());
+                        items.insert(
+                            1,
+                            widget::space::horizontal().width(spacing.space_xxs).into(),
+                        );
                     }
 
                     let menu_button = menu_button(items);
@@ -301,16 +326,31 @@ pub fn menu_items<
                                 .width(Length::Fixed(16.0))
                                 .into()
                         } else {
-                            widget::Space::with_width(Length::Fixed(16.0)).into()
+                            widget::space::horizontal()
+                                .width(Length::Fixed(16.0))
+                                .into()
                         },
-                        widget::Space::with_width(spacing.space_xxs).into(),
-                        widget::text(label).align_x(iced::Alignment::Start).into(),
-                        widget::horizontal_space().into(),
-                        widget::text(key).class(key_class).into(),
+                        widget::space::horizontal().width(spacing.space_xxs).into(),
+                        widget::text(label)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .align_x(iced::Alignment::Start)
+                            .into(),
+                        widget::space::horizontal().into(),
+                        widget::text(key)
+                            .class(key_class)
+                            .ellipsize(iced_core::text::Ellipsize::Middle(
+                                iced_core::text::EllipsizeHeightLimit::Lines(1),
+                            ))
+                            .into(),
                     ];
 
                     if let Some(icon) = icon {
-                        items.insert(1, widget::Space::with_width(spacing.space_xxs).into());
+                        items.insert(
+                            1,
+                            widget::space::horizontal().width(spacing.space_xxs).into(),
+                        );
                         items.insert(2, widget::icon::icon(icon).size(14).into());
                     }
 
@@ -324,8 +364,12 @@ pub fn menu_items<
                     trees.push(MenuTree::<Message>::with_children(
                         RcElementWrapper::new(crate::Element::from(
                             menu_button::<'static, _>(vec![
-                                widget::text(l.clone()).into(),
-                                widget::horizontal_space().into(),
+                                widget::text(l.clone())
+                                    .ellipsize(iced_core::text::Ellipsize::Middle(
+                                        iced_core::text::EllipsizeHeightLimit::Lines(1),
+                                    ))
+                                    .into(),
+                                widget::space::horizontal().into(),
                                 widget::icon::from_name("pan-end-symbolic")
                                     .size(16)
                                     .icon()
@@ -339,7 +383,7 @@ pub fn menu_items<
                 MenuItem::Divider => {
                     if i != size - 1 {
                         trees.push(MenuTree::<Message>::from(Element::from(
-                            iced::widget::horizontal_rule(9).class(theme::Rule::LightDivider),
+                            iced::widget::rule::horizontal(9).class(theme::Rule::LightDivider),
                         )));
                     }
                 }

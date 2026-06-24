@@ -1,10 +1,7 @@
-use cosmic::{
-    iced::widget::{column, container, horizontal_space, image, row, svg, text},
-    iced::Length,
-    theme,
-    widget::{list_column, settings, toggler},
-    Element,
-};
+use cosmic::iced::widget::{column, container, horizontal_space, image, row, svg, text};
+use cosmic::iced::Length;
+use cosmic::widget::{list_column, settings, toggler};
+use cosmic::{theme, Element};
 
 use super::{Page, SubPage, Window};
 
@@ -147,7 +144,8 @@ impl State {
     fn view_desktop_options<'a>(&'a self, window: &'a Window) -> Element<'a, Message> {
         settings::view_column(vec![
             window.parent_page_button(DesktopPage::DesktopOptions),
-            settings::view_section("Super Key Action")
+            settings::section()
+                .title("Super Key Action")
                 .add(settings::item("Launcher", horizontal_space(Length::Fill)))
                 .add(settings::item("Workspaces", horizontal_space(Length::Fill)))
                 .add(settings::item(
@@ -155,38 +153,34 @@ impl State {
                     horizontal_space(Length::Fill),
                 ))
                 .into(),
-            settings::view_section("Hot Corner")
+            settings::section()
+                .title("Hot Corner")
                 .add(settings::item(
                     "Enable top-left hot corner for Workspaces",
-                    toggler(None, self.top_left_hot_corner, Message::TopLeftHotCorner),
+                    toggler(self.top_left_hot_corner).on_toggle(Message::TopLeftHotCorner),
                 ))
                 .into(),
-            settings::view_section("Top Panel")
+            settings::section()
+                .title("Top Panel")
                 .add(settings::item(
                     "Show Workspaces Button",
-                    toggler(
-                        None,
-                        self.show_workspaces_button,
-                        Message::ShowWorkspacesButton,
-                    ),
+                    toggler(self.show_workspaces_button).on_toggle(Message::ShowWorkspacesButton),
                 ))
                 .add(settings::item(
                     "Show Applications Button",
-                    toggler(
-                        None,
-                        self.show_applications_button,
-                        Message::ShowApplicationsButton,
-                    ),
+                    toggler(self.show_applications_button)
+                        .on_toggle(Message::ShowApplicationsButton),
                 ))
                 .into(),
-            settings::view_section("Window Controls")
+            settings::section()
+                .title("Window Controls")
                 .add(settings::item(
                     "Show Minimize Button",
-                    toggler(None, self.show_minimize_button, Message::ShowMinimizeButton),
+                    toggler(self.show_minimize_button).on_toggle(Message::ShowMinimizeButton),
                 ))
                 .add(settings::item(
                     "Show Maximize Button",
-                    toggler(None, self.show_maximize_button, Message::ShowMaximizeButton),
+                    toggler(self.show_maximize_button).on_toggle(Message::ShowMaximizeButton),
                 ))
                 .into(),
         ])
@@ -245,12 +239,12 @@ impl State {
             list_column()
                 .add(settings::item(
                     "Same background on all displays",
-                    toggler(None, self.same_background, Message::SameBackground),
+                    toggler(self.same_background).on_toggle(Message::SameBackground),
                 ))
                 .add(settings::item("Background fit", text("TODO")))
                 .add(settings::item(
                     "Slideshow",
-                    toggler(None, self.slideshow, Message::Slideshow),
+                    toggler(self.slideshow).on_toggle(Message::Slideshow),
                 ))
                 .into(),
             column(image_column).spacing(16).into(),
@@ -261,7 +255,8 @@ impl State {
     fn view_desktop_workspaces<'a>(&'a self, window: &'a Window) -> Element<'a, Message> {
         settings::view_column(vec![
             window.parent_page_button(DesktopPage::Wallpaper),
-            settings::view_section("Workspace Behavior")
+            settings::section()
+                .title("Workspace Behavior")
                 .add(settings::item(
                     "Dynamic workspaces",
                     horizontal_space(Length::Fill),
@@ -271,7 +266,8 @@ impl State {
                     horizontal_space(Length::Fill),
                 ))
                 .into(),
-            settings::view_section("Multi-monitor Behavior")
+            settings::section()
+                .title("Multi-monitor Behavior")
                 .add(settings::item(
                     "Workspaces Span Displays",
                     horizontal_space(Length::Fill),

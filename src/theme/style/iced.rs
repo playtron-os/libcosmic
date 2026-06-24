@@ -5,17 +5,17 @@
 
 use crate::theme::{CosmicComponent, TRANSPARENT_COMPONENT, Theme};
 use cosmic_theme::composite::over;
-use iced::{
-    overlay::menu,
-    widget::{
-        button as iced_button, checkbox as iced_checkbox, combo_box, container as iced_container,
-        pane_grid, pick_list, progress_bar, radio, rule, scrollable,
-        slider::{self, Rail},
-        svg, toggler,
-    },
+use iced::overlay::menu;
+use iced::theme::Base;
+use iced::widget::slider::{self, Rail};
+use iced::widget::{
+    button as iced_button, checkbox as iced_checkbox, combo_box, container as iced_container,
+    pane_grid, pick_list, progress_bar, radio, rule, scrollable, svg, toggler,
 };
 use iced_core::{Background, Border, Color, Shadow, Vector};
-use iced_widget::{pane_grid::Highlight, text_editor, text_input};
+use iced_widget::pane_grid::Highlight;
+use iced_widget::scrollable::AutoScroll;
+use iced_widget::{text_editor, text_input};
 use palette::WithAlpha;
 use std::rc::Rc;
 
@@ -36,13 +36,13 @@ pub mod application {
         }
     }
 
-    pub fn appearance(theme: &Theme) -> Appearance {
+    pub fn style(theme: &Theme) -> iced::theme::Style {
         let cosmic = theme.cosmic();
 
-        Appearance {
-            icon_color: cosmic.bg_color().into(),
+        iced::theme::Style {
             background_color: cosmic.bg_color().into(),
             text_color: cosmic.on_bg_color().into(),
+            icon_color: cosmic.on_bg_color().into(),
         }
     }
 }
@@ -423,6 +423,7 @@ impl<'a> Container<'a> {
                 ..Default::default()
             },
             shadow: Shadow::default(),
+            snap: true,
         }
     }
 
@@ -437,6 +438,7 @@ impl<'a> Container<'a> {
                 ..Default::default()
             },
             shadow: Shadow::default(),
+            snap: true,
         }
     }
 
@@ -451,6 +453,7 @@ impl<'a> Container<'a> {
                 ..Default::default()
             },
             shadow: Shadow::default(),
+            snap: true,
         }
     }
 }
@@ -494,6 +497,7 @@ impl iced_container::Catalog for Theme {
                     ..Default::default()
                 },
                 shadow: Shadow::default(),
+                snap: true,
             },
 
             Container::List => {
@@ -507,6 +511,7 @@ impl iced_container::Catalog for Theme {
                         ..Default::default()
                     },
                     shadow: Shadow::default(),
+                    snap: true,
                 }
             }
 
@@ -553,6 +558,7 @@ impl iced_container::Catalog for Theme {
                         .into(),
                         ..Default::default()
                     },
+                    snap: true,
                     shadow: Shadow::default(),
                 }
             }
@@ -583,6 +589,7 @@ impl iced_container::Catalog for Theme {
                     radius: cosmic.corner_radii.radius_s.into(),
                 },
                 shadow: Shadow::default(),
+                snap: true,
             },
 
             Container::Tooltip => iced_container::Style {
@@ -594,6 +601,7 @@ impl iced_container::Catalog for Theme {
                     ..Default::default()
                 },
                 shadow: Shadow::default(),
+                snap: true,
             },
 
             Container::ContentArea => iced_container::Style {
@@ -606,6 +614,7 @@ impl iced_container::Catalog for Theme {
                     color: cosmic.background.divider.into(),
                 },
                 shadow: Shadow::default(),
+                snap: true,
             },
 
             Container::Card => {
@@ -623,6 +632,7 @@ impl iced_container::Catalog for Theme {
                             ..Default::default()
                         },
                         shadow: Shadow::default(),
+                        snap: true,
                     },
                     cosmic_theme::Layer::Primary => iced_container::Style {
                         icon_color: Some(Color::from(cosmic.primary.component.on)),
@@ -635,6 +645,7 @@ impl iced_container::Catalog for Theme {
                             ..Default::default()
                         },
                         shadow: Shadow::default(),
+                        snap: true,
                     },
                     cosmic_theme::Layer::Secondary => iced_container::Style {
                         icon_color: Some(Color::from(cosmic.secondary.component.on)),
@@ -647,6 +658,7 @@ impl iced_container::Catalog for Theme {
                             ..Default::default()
                         },
                         shadow: Shadow::default(),
+                        snap: true,
                     },
                 }
             }
@@ -665,6 +677,7 @@ impl iced_container::Catalog for Theme {
                     offset: Vector::new(0.0, 4.0),
                     blur_radius: 16.0,
                 },
+                snap: true,
             },
         }
     }
@@ -804,6 +817,7 @@ impl menu::Catalog for Theme {
             },
             selected_text_color: Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0),
             selected_background: Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0)),
+            shadow: Default::default(),
         }
     }
 }
@@ -843,7 +857,7 @@ impl pick_list::Catalog for Theme {
                 background: Background::Color(cosmic.background.base.into()),
                 ..appearance
             },
-            pick_list::Status::Opened => appearance,
+            pick_list::Status::Opened { is_hovered: _ } => appearance,
         }
     }
 }
@@ -933,6 +947,8 @@ impl toggler::Catalog for Theme {
             background_border_color: Color::TRANSPARENT,
             foreground_border_width: 0.0,
             foreground_border_color: Color::TRANSPARENT,
+            text_color: None,
+            padding_ratio: 0.0,
         };
         match status {
             toggler::Status::Active { is_toggled } => active,
@@ -955,9 +971,9 @@ impl toggler::Catalog for Theme {
                     ..active
                 }
             }
-            toggler::Status::Disabled => {
-                active.background.a /= 2.;
-                active.foreground.a /= 2.;
+            toggler::Status::Disabled { is_toggled } => {
+                active.background = active.background.scale_alpha(0.5);
+                active.foreground = active.foreground.scale_alpha(0.5);
                 active
             }
         }
@@ -1099,21 +1115,21 @@ impl rule::Catalog for Theme {
         match class {
             Rule::Default => rule::Style {
                 color: self.current_container().divider.into(),
-                width: 1,
                 radius: 0.0.into(),
                 fill_mode: rule::FillMode::Full,
+                snap: true,
             },
             Rule::LightDivider => rule::Style {
                 color: self.current_container().divider.into(),
-                width: 1,
                 radius: 0.0.into(),
                 fill_mode: rule::FillMode::Padded(8),
+                snap: true,
             },
             Rule::HeavyDivider => rule::Style {
                 color: self.current_container().divider.into(),
-                width: 4,
                 radius: 2.0.into(),
                 fill_mode: rule::FillMode::Full,
+                snap: true,
             },
             Rule::Custom(f) => f(self),
         }
@@ -1139,7 +1155,10 @@ impl scrollable::Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: scrollable::Status) -> scrollable::Style {
         match status {
-            scrollable::Status::Active => {
+            scrollable::Status::Active {
+                is_horizontal_scrollbar_disabled,
+                is_vertical_scrollbar_disabled,
+            } => {
                 let cosmic = self.cosmic();
                 let neutral_5 = cosmic.palette.neutral_5.with_alpha(0.7);
                 let neutral_6 = cosmic.palette.neutral_6.with_alpha(0.7);
@@ -1152,7 +1171,7 @@ impl scrollable::Catalog for Theme {
                         },
                         background: None,
                         scroller: scrollable::Scroller {
-                            color: if cosmic.is_dark {
+                            background: if cosmic.is_dark {
                                 neutral_6.into()
                             } else {
                                 neutral_5.into()
@@ -1170,7 +1189,7 @@ impl scrollable::Catalog for Theme {
                         },
                         background: None,
                         scroller: scrollable::Scroller {
-                            color: if cosmic.is_dark {
+                            background: if cosmic.is_dark {
                                 neutral_6.into()
                             } else {
                                 neutral_5.into()
@@ -1182,6 +1201,13 @@ impl scrollable::Catalog for Theme {
                         },
                     },
                     gap: None,
+                    // TODO: what is auto scroll?
+                    auto_scroll: AutoScroll {
+                        background: Color::TRANSPARENT.into(),
+                        border: Border::default(),
+                        shadow: Shadow::default(),
+                        icon: Color::TRANSPARENT.into(),
+                    },
                 };
                 let small_widget_container = self.current_container().small_widget.with_alpha(0.7);
 
@@ -1213,7 +1239,7 @@ impl scrollable::Catalog for Theme {
                         },
                         background: None,
                         scroller: scrollable::Scroller {
-                            color: if cosmic.is_dark {
+                            background: if cosmic.is_dark {
                                 neutral_6.into()
                             } else {
                                 neutral_5.into()
@@ -1231,7 +1257,7 @@ impl scrollable::Catalog for Theme {
                         },
                         background: None,
                         scroller: scrollable::Scroller {
-                            color: if cosmic.is_dark {
+                            background: if cosmic.is_dark {
                                 neutral_6.into()
                             } else {
                                 neutral_5.into()
@@ -1243,6 +1269,13 @@ impl scrollable::Catalog for Theme {
                         },
                     },
                     gap: None,
+                    // TODO: what is auto scroll?
+                    auto_scroll: AutoScroll {
+                        background: Color::TRANSPARENT.into(),
+                        border: Border::default(),
+                        shadow: Shadow::default(),
+                        icon: Color::TRANSPARENT.into(),
+                    },
                 };
 
                 if matches!(class, Scrollable::Permanent) {
@@ -1322,9 +1355,16 @@ impl iced_widget::text::Catalog for Theme {
         match class {
             Text::Accent => iced_widget::text::Style {
                 color: Some(self.cosmic().accent_text_color().into()),
+                ..Default::default()
             },
-            Text::Default => iced_widget::text::Style { color: None },
-            Text::Color(c) => iced_widget::text::Style { color: Some(*c) },
+            Text::Default => iced_widget::text::Style {
+                color: None,
+                ..Default::default()
+            },
+            Text::Color(c) => iced_widget::text::Style {
+                color: Some(*c),
+                ..Default::default()
+            },
             Text::Custom(f) => f(self),
         }
     }
@@ -1413,7 +1453,7 @@ impl text_input::Catalog for Theme {
                     },
                 }
             }
-            text_input::Status::Focused => {
+            text_input::Status::Focused { is_hovered } => {
                 let bg = self.current_container().small_widget.with_alpha(0.25);
 
                 match class {
@@ -1490,7 +1530,8 @@ impl iced_widget::text_editor::Catalog for Theme {
         let selection = cosmic.accent.base.into();
         let value = cosmic.palette.neutral_9.into();
         let placeholder = cosmic.palette.neutral_9.with_alpha(0.7).into();
-        let icon = cosmic.background.on.into();
+        let icon: Color = cosmic.background.on.into();
+        // TODO do we need to add icon color back?
 
         match status {
             iced_widget::text_editor::Status::Active
@@ -1502,23 +1543,23 @@ impl iced_widget::text_editor::Catalog for Theme {
                     width: f32::from(cosmic.space_xxxs()),
                     color: iced::Color::from(cosmic.bg_divider()),
                 },
-                icon,
                 placeholder,
                 value,
                 selection,
             },
-            iced_widget::text_editor::Status::Focused => iced_widget::text_editor::Style {
-                background: iced::Color::from(cosmic.bg_color()).into(),
-                border: Border {
-                    radius: cosmic.corner_radii.radius_0.into(),
-                    width: f32::from(cosmic.space_xxxs()),
-                    color: iced::Color::from(cosmic.accent.base),
-                },
-                icon,
-                placeholder,
-                value,
-                selection,
-            },
+            iced_widget::text_editor::Status::Focused { is_hovered } => {
+                iced_widget::text_editor::Style {
+                    background: iced::Color::from(cosmic.bg_color()).into(),
+                    border: Border {
+                        radius: cosmic.corner_radii.radius_0.into(),
+                        width: f32::from(cosmic.space_xxxs()),
+                        color: iced::Color::from(cosmic.accent.base),
+                    },
+                    placeholder,
+                    value,
+                    selection,
+                }
+            }
         }
     }
 }
@@ -1532,6 +1573,21 @@ impl iced_widget::markdown::Catalog for Theme {
             border: iced::border::rounded(2),
             ..iced_container::Style::default()
         })
+    }
+}
+
+impl iced_widget::table::Catalog for Theme {
+    type Class<'a> = iced_widget::table::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme| iced_widget::table::Style {
+            separator_x: theme.current_container().divider.into(),
+            separator_y: theme.current_container().divider.into(),
+        })
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> iced_widget::table::Style {
+        class(self)
     }
 }
 
@@ -1552,3 +1608,50 @@ impl iced_widget::qr_code::Catalog for Theme {
 }
 
 impl combo_box::Catalog for Theme {}
+
+impl Base for Theme {
+    fn default(preference: iced::theme::Mode) -> Self {
+        match preference {
+            iced::theme::Mode::Light => Theme::light(),
+            iced::theme::Mode::Dark | iced::theme::Mode::None => Theme::dark(),
+        }
+    }
+
+    fn mode(&self) -> iced::theme::Mode {
+        if self.theme_type.is_dark() {
+            iced::theme::Mode::Dark
+        } else {
+            iced::theme::Mode::Light
+        }
+    }
+
+    fn base(&self) -> iced::theme::Style {
+        iced::theme::Style {
+            background_color: self.cosmic().bg_color().into(),
+            text_color: self.cosmic().on_bg_color().into(),
+            icon_color: self.cosmic().on_bg_color().into(),
+        }
+    }
+
+    fn palette(&self) -> Option<iced::theme::Palette> {
+        Some(iced::theme::Palette {
+            primary: self.cosmic().accent.base.into(),
+            success: self.cosmic().success.base.into(),
+            warning: self.cosmic().warning.base.into(),
+            danger: self.cosmic().destructive.base.into(),
+            background: iced::Color::from(self.cosmic().bg_color()),
+            text: iced::Color::from(self.cosmic().on_bg_color()),
+        })
+    }
+
+    fn name(&self) -> &str {
+        match &self.theme_type {
+            crate::theme::ThemeType::Dark => "Cosmic Dark Theme",
+            crate::theme::ThemeType::Light => "Cosmic Light Theme",
+            crate::theme::ThemeType::HighContrastDark => "Cosmic High Contrast Dark Theme",
+            crate::theme::ThemeType::HighContrastLight => "Cosmic High Contrast Light Theme",
+            crate::theme::ThemeType::Custom(theme) => "Custom Cosmic Theme",
+            crate::theme::ThemeType::System { prefer_dark, theme } => &theme.name,
+        }
+    }
+}

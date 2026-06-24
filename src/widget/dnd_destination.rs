@@ -1,28 +1,17 @@
-use std::{
-    borrow::Cow,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::borrow::Cow;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use iced::Vector;
 
-use crate::{
-    Element,
-    iced::{
-        Event, Length, Rectangle,
-        clipboard::{
-            dnd::{self, DndAction, DndDestinationRectangle, DndEvent, OfferEvent},
-            mime::AllowedMimeTypes,
-        },
-        event,
-        id::Internal,
-        mouse, overlay,
-    },
-    iced_core::{
-        self, Clipboard, Shell, layout,
-        widget::{Tree, tree},
-    },
-    widget::{Id, Widget},
-};
+use crate::Element;
+use crate::widget::{Id, Widget};
+
+use iced::clipboard::dnd::{self, DndAction, DndDestinationRectangle, DndEvent, OfferEvent};
+use iced::clipboard::mime::AllowedMimeTypes;
+use iced::id::Internal;
+use iced::{Event, Length, Rectangle, event, mouse, overlay};
+use iced_core::widget::{Tree, tree};
+use iced_core::{self, Clipboard, Shell, layout};
 
 pub fn dnd_destination<'a, Message: 'static>(
     child: impl Into<Element<'a, Message>>,
@@ -40,6 +29,8 @@ pub fn dnd_destination_for_data<'a, T: AllowedMimeTypes, Message: 'static>(
 
 static DRAG_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 const DND_DEST_LOG_TARGET: &str = "libcosmic::widget::dnd_destination";
+#[cfg(feature = "xdg-portal")]
+pub const FILE_TRANSFER_MIME: &str = "application/vnd.portal.filetransfer";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DragId(pub u128);
@@ -73,6 +64,8 @@ pub struct DndDestination<'a, Message> {
     on_action_selected: Option<Box<dyn Fn(DndAction) -> Message>>,
     on_data_received: Option<Box<dyn Fn(String, Vec<u8>) -> Message>>,
     on_finish: Option<Box<dyn Fn(String, Vec<u8>, DndAction, f64, f64) -> Message>>,
+    #[cfg(feature = "xdg-portal")]
+    on_file_transfer: Option<Box<dyn Fn(String) -> Message>>,
 }
 
 impl<'a, Message: 'static> DndDestination<'a, Message> {
@@ -99,6 +92,8 @@ impl<'a, Message: 'static> DndDestination<'a, Message> {
             on_action_selected: None,
             on_data_received: None,
             on_finish: None,
+            #[cfg(feature = "xdg-portal")]
+            on_file_transfer: None,
         }
     }
 
@@ -124,6 +119,8 @@ impl<'a, Message: 'static> DndDestination<'a, Message> {
             on_finish: Some(Box::new(move |mime, data, action, _, _| {
                 on_finish(T::try_from((data, mime)).ok(), action)
             })),
+            #[cfg(feature = "xdg-portal")]
+            on_file_transfer: None,
         }
     }
 
@@ -159,6 +156,8 @@ impl<'a, Message: 'static> DndDestination<'a, Message> {
             on_action_selected: None,
             on_data_received: None,
             on_finish: None,
+            #[cfg(feature = "xdg-portal")]
+            on_file_transfer: None,
         }
     }
 
@@ -237,6 +236,20 @@ impl<'a, Message: 'static> DndDestination<'a, Message> {
         self
     }
 
+    /// Add a message that will be emitted instead of [`on_data_received`](Self::on_data_received) if the dropped files
+    /// are offered through the xdg share portal. You can then use [`crate::command::file_transfer_receive`]
+    /// with the key to receive the files.
+    #[cfg(feature = "xdg-portal")]
+    #[must_use]
+    pub fn on_file_transfer(mut self, f: impl Fn(String) -> Message + 'static) -> Self {
+        match self.mime_types.iter().position(|v| v == "text/uri-list") {
+            Some(i) => self.mime_types.insert(i, Cow::Borrowed(FILE_TRANSFER_MIME)),
+            None => self.mime_types.push(Cow::Borrowed(FILE_TRANSFER_MIME)),
+        }
+        self.on_file_transfer = Some(Box::new(f));
+        self
+    }
+
     /// Returns the drag id of the destination.
     ///
     /// # Panics
@@ -267,7 +280,7 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
     }
 
     fn diff(&mut self, tree: &mut Tree) {
-        tree.children[0].diff(self.container.as_widget_mut());
+        tree.diff_children(std::slice::from_mut(&mut self.container));
     }
 
     fn state(&self) -> iced_core::widget::tree::State {
@@ -279,43 +292,43 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &crate::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.container
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: layout::Layout<'_>,
         renderer: &crate::Renderer,
         operation: &mut dyn iced_core::widget::Operation<()>,
     ) {
         self.container
-            .as_widget()
+            .as_widget_mut()
             .operate(&mut tree.children[0], layout, renderer, operation);
     }
 
     #[allow(clippy::too_many_lines)]
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: layout::Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &crate::Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        let s = self.container.as_widget_mut().on_event(
+    ) {
+        self.container.as_widget_mut().update(
             &mut tree.children[0],
-            event.clone(),
+            event,
             layout,
             cursor,
             renderer,
@@ -323,8 +336,8 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
             shell,
             viewport,
         );
-        if matches!(s, event::Status::Captured) {
-            return event::Status::Captured;
+        if shell.is_event_captured() {
+            return;
         }
 
         let state = tree.state.downcast_mut::<State<()>>();
@@ -343,23 +356,23 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                 OfferEvent::Enter {
                     x, y, mime_types, ..
                 },
-            )) if id == Some(my_id) => {
+            )) if *id == Some(my_id) => {
                 if !self.mime_matches(&mime_types) {
                     log::trace!(
                         target: DND_DEST_LOG_TARGET,
                         "offer enter id={my_id:?} ignored (mimes={mime_types:?} not in {:?})",
                         self.mime_types
                     );
-                    return event::Status::Ignored;
+                    return;
                 }
                 log::trace!(
                     target: DND_DEST_LOG_TARGET,
                     "offer enter id={my_id:?} coords=({x},{y}) mimes={mime_types:?}"
                 );
                 if let Some(msg) = state.on_enter(
-                    x,
-                    y,
-                    mime_types,
+                    *x,
+                    *y,
+                    mime_types.clone(),
                     self.on_enter.as_ref().map(std::convert::AsRef::as_ref),
                     (),
                 ) {
@@ -367,13 +380,13 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                 }
                 if self.forward_drag_as_cursor {
                     #[allow(clippy::cast_possible_truncation)]
-                    let drag_cursor = mouse::Cursor::Available((x as f32, y as f32).into());
+                    let drag_cursor = mouse::Cursor::Available((*x as f32, *y as f32).into());
                     let event = Event::Mouse(mouse::Event::CursorMoved {
                         position: drag_cursor.position().unwrap(),
                     });
-                    self.container.as_widget_mut().on_event(
+                    self.container.as_widget_mut().update(
                         &mut tree.children[0],
-                        event,
+                        &event,
                         layout,
                         drag_cursor,
                         renderer,
@@ -382,7 +395,8 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                         viewport,
                     );
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Dnd(DndEvent::Offer(_, OfferEvent::Leave)) => {
                 log::trace!(
@@ -399,9 +413,9 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                 if self.forward_drag_as_cursor {
                     let drag_cursor = mouse::Cursor::Unavailable;
                     let event = Event::Mouse(mouse::Event::CursorLeft);
-                    self.container.as_widget_mut().on_event(
+                    self.container.as_widget_mut().update(
                         &mut tree.children[0],
-                        event,
+                        &event,
                         layout,
                         drag_cursor,
                         renderer,
@@ -410,16 +424,16 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                         viewport,
                     );
                 }
-                return event::Status::Ignored;
+                return;
             }
-            Event::Dnd(DndEvent::Offer(id, OfferEvent::Motion { x, y })) if id == Some(my_id) => {
+            Event::Dnd(DndEvent::Offer(id, OfferEvent::Motion { x, y })) if *id == Some(my_id) => {
                 log::trace!(
                     target: DND_DEST_LOG_TARGET,
                     "offer motion id={my_id:?} coords=({x},{y})"
                 );
                 if let Some(msg) = state.on_motion(
-                    x,
-                    y,
+                    *x,
+                    *y,
                     self.on_motion.as_ref().map(std::convert::AsRef::as_ref),
                     self.on_enter.as_ref().map(std::convert::AsRef::as_ref),
                     (),
@@ -429,13 +443,13 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
 
                 if self.forward_drag_as_cursor {
                     #[allow(clippy::cast_possible_truncation)]
-                    let drag_cursor = mouse::Cursor::Available((x as f32, y as f32).into());
+                    let drag_cursor = mouse::Cursor::Available((*x as f32, *y as f32).into());
                     let event = Event::Mouse(mouse::Event::CursorMoved {
                         position: drag_cursor.position().unwrap(),
                     });
-                    self.container.as_widget_mut().on_event(
+                    self.container.as_widget_mut().update(
                         &mut tree.children[0],
-                        event,
+                        &event,
                         layout,
                         drag_cursor,
                         renderer,
@@ -444,7 +458,8 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                         viewport,
                     );
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Dnd(DndEvent::Offer(_, OfferEvent::LeaveDestination)) => {
                 log::trace!(
@@ -457,9 +472,9 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                 {
                     shell.publish(msg);
                 }
-                return event::Status::Ignored;
+                return;
             }
-            Event::Dnd(DndEvent::Offer(id, OfferEvent::Drop)) if id == Some(my_id) => {
+            Event::Dnd(DndEvent::Offer(id, OfferEvent::Drop)) if *id == Some(my_id) => {
                 log::trace!(
                     target: DND_DEST_LOG_TARGET,
                     "offer drop id={my_id:?}"
@@ -469,49 +484,69 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
                 {
                     shell.publish(msg);
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Dnd(DndEvent::Offer(id, OfferEvent::SelectedAction(action)))
-                if id == Some(my_id) =>
+                if *id == Some(my_id) =>
             {
                 log::trace!(
                     target: DND_DEST_LOG_TARGET,
                     "offer selected-action id={my_id:?} action={action:?}"
                 );
                 if let Some(msg) = state.on_action_selected(
-                    action,
+                    *action,
                     self.on_action_selected
                         .as_ref()
                         .map(std::convert::AsRef::as_ref),
                 ) {
                     shell.publish(msg);
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             Event::Dnd(DndEvent::Offer(id, OfferEvent::Data { data, mime_type }))
-                if id == Some(my_id) =>
+                if *id == Some(my_id) =>
             {
                 log::trace!(
                     target: DND_DEST_LOG_TARGET,
                     "offer data id={my_id:?} mime={mime_type:?} bytes={}",
                     data.len()
                 );
+
+                #[cfg(feature = "xdg-portal")]
+                if mime_type == FILE_TRANSFER_MIME
+                    && let Some(f) = self.on_file_transfer.as_ref()
+                    && let Ok(s) = String::from_utf8(data[..data.len() - 1].to_vec())
+                {
+                    shell.publish(f(s));
+                    shell.capture_event();
+                    return;
+                }
+
                 if let (Some(msg), ret) = state.on_data_received(
-                    mime_type,
-                    data,
+                    mime_type.clone(),
+                    data.clone(),
                     self.on_data_received
                         .as_ref()
                         .map(std::convert::AsRef::as_ref),
                     self.on_finish.as_ref().map(std::convert::AsRef::as_ref),
                 ) {
                     shell.publish(msg);
-                    return ret;
+                    if ret == event::Status::Captured {
+                        log::trace!(
+                            target: DND_DEST_LOG_TARGET,
+                            "offer data id={my_id:?} captured"
+                        );
+                        shell.capture_event();
+                    }
+                    return;
                 }
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
             _ => {}
         }
-        event::Status::Ignored
     }
 
     fn mouse_interaction(
@@ -555,13 +590,18 @@ impl<Message: 'static> Widget<Message, crate::Theme, crate::Renderer>
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: layout::Layout<'_>,
+        layout: layout::Layout<'b>,
         renderer: &crate::Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
-        self.container
-            .as_widget_mut()
-            .overlay(&mut tree.children[0], layout, renderer, translation)
+        self.container.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn drag_destinations(

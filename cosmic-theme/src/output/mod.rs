@@ -1,10 +1,17 @@
-use palette::{Srgba, rgb::Rgba};
+use configparser::ini::WriteOptions;
+use palette::Srgba;
+use palette::rgb::Rgba;
 use thiserror::Error;
 
 use crate::Theme;
 
 /// Module for outputting the Cosmic gtk4 theme type as CSS
 pub mod gtk4_output;
+
+/// Module for configuring qt5ct and qt6ct to use our qt theme
+pub mod qt56ct_output;
+/// Module for outputting the Cosmic qt theme type as kdeglobals
+pub mod qt_output;
 
 pub mod vs_code;
 
@@ -14,33 +21,48 @@ pub enum OutputError {
     Io(std::io::Error),
     #[error("Missing config directory")]
     MissingConfigDir,
+    #[error("Missing data directory")]
+    MissingDataDir,
     #[error("Serde Error: {0}")]
     Serde(#[from] serde_json::Error),
+    #[error("Ini Error: {0}")]
+    Ini(String),
 }
 
 impl Theme {
     #[inline]
+    /// Apply COSMIC theme exports for GTK and Qt applications.
     pub fn apply_exports(&self) -> Result<(), OutputError> {
         let gtk_res = Theme::apply_gtk(self.is_dark);
-        let vs_res = self.clone().apply_vs_code();
+        let qt_res = Theme::apply_qt(self.is_dark);
+        let qt56ct_res = Theme::apply_qt56ct(self.is_dark);
         gtk_res?;
-        vs_res?;
+        qt_res?;
+        qt56ct_res?;
         Ok(())
     }
 
     #[inline]
+    /// Write COSMIC theme exports for GTK and Qt applications.
     pub fn write_exports(&self) -> Result<(), OutputError> {
         let gtk_res = self.write_gtk4();
+        let qt_res = self.write_qt();
+        let qt56ct_res = self.write_qt56ct();
         gtk_res?;
+        qt_res?;
+        qt56ct_res?;
         Ok(())
     }
 
     #[inline]
+    /// Un-export GTK and Qt theme configurations applied by us.
     pub fn reset_exports() -> Result<(), OutputError> {
         let gtk_res = Theme::reset_gtk();
-        let vs_res = Theme::reset_vs_code();
+        let qt_res = Theme::reset_qt();
+        let qt56ct_res = Theme::reset_qt56ct();
         gtk_res?;
-        vs_res?;
+        qt_res?;
+        qt56ct_res?;
         Ok(())
     }
 }
@@ -59,4 +81,10 @@ pub fn to_rgba(c: Srgba) -> String {
         "rgba({}, {}, {}, {:1.2})",
         c_u8.red, c_u8.green, c_u8.blue, c.alpha
     )
+}
+
+pub fn qt_settings_ini_style() -> WriteOptions {
+    let mut write_options = WriteOptions::default();
+    write_options.blank_lines_between_sections = 1;
+    write_options
 }

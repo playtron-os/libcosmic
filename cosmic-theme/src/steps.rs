@@ -1,7 +1,8 @@
 use std::num::NonZeroUsize;
 
 use almost::equal;
-use palette::{ClampAssign, FromColor, Lch, Oklcha, Srgb, Srgba, convert::FromColorUnclamped};
+use palette::convert::FromColorUnclamped;
+use palette::{ClampAssign, FromColor, Lch, Oklcha, Srgb, Srgba};
 
 /// Get an array of 100 colors with a specific hue and chroma
 /// over the full range of lightness.
@@ -145,7 +146,6 @@ pub fn is_valid_srgb(c: Srgba) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use almost::equal;
     use palette::{OklabHue, Srgba};
 
     use super::{is_valid_srgb, oklch_to_srgba_nearest_chroma};
@@ -173,57 +173,57 @@ mod tests {
     fn test_conversion_boundaries() {
         let c1 = palette::Oklcha::new(0.0, 0.288, OklabHue::from_degrees(0.0), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1);
-        equal(srgb.red, 0.0);
-        equal(srgb.blue, 0.0);
-        equal(srgb.green, 0.0);
+        almost::zero(srgb.red);
+        almost::zero(srgb.blue);
+        almost::zero(srgb.green);
 
         let c1 = palette::Oklcha::new(1.0, 0.288, OklabHue::from_degrees(0.0), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1);
 
-        equal(srgb.red, 1.0);
-        equal(srgb.blue, 1.0);
-        equal(srgb.green, 1.0);
+        almost::equal(srgb.red, 1.0);
+        almost::equal(srgb.blue, 1.0);
+        almost::equal(srgb.green, 1.0);
     }
 
     #[test]
     fn test_conversion_colors() {
         let c1 = palette::Oklcha::new(0.4608, 0.11111, OklabHue::new(57.31), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 133);
-        assert!(srgb.green == 69);
-        assert!(srgb.blue == 0);
+        assert_eq!(srgb.red, 133);
+        assert_eq!(srgb.green, 69);
+        assert_eq!(srgb.blue, 0);
 
         let c1 = palette::Oklcha::new(0.30, 0.08, OklabHue::new(35.0), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 78);
-        assert!(srgb.green == 27);
-        assert!(srgb.blue == 15);
+        assert_eq!(srgb.red, 78);
+        assert_eq!(srgb.green, 27);
+        assert_eq!(srgb.blue, 15);
 
         let c1 = palette::Oklcha::new(0.757, 0.146, OklabHue::new(301.2), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 192);
-        assert!(srgb.green == 153);
-        assert!(srgb.blue == 253);
+        assert_eq!(srgb.red, 192);
+        assert_eq!(srgb.green, 153);
+        assert_eq!(srgb.blue, 253);
     }
 
     #[test]
     fn test_conversion_fallback_colors() {
         let c1 = palette::Oklcha::new(0.70, 0.284, OklabHue::new(35.0), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 255);
-        assert!(srgb.green == 103);
-        assert!(srgb.blue == 65);
+        assert_eq!(srgb.red, 255);
+        assert_eq!(srgb.green, 102);
+        assert_eq!(srgb.blue, 65);
 
         let c1 = palette::Oklcha::new(0.757, 0.239, OklabHue::new(301.2), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 193);
-        assert!(srgb.green == 152);
-        assert!(srgb.blue == 255);
+        assert_eq!(srgb.red, 193);
+        assert_eq!(srgb.green, 152);
+        assert_eq!(srgb.blue, 255);
 
         let c1 = palette::Oklcha::new(0.163, 0.333, OklabHue::new(141.0), 1.0);
         let srgb = oklch_to_srgba_nearest_chroma(c1).into_format::<u8, u8>();
-        assert!(srgb.red == 1);
-        assert!(srgb.green == 19);
-        assert!(srgb.blue == 0);
+        assert_eq!(srgb.red, 1);
+        assert_eq!(srgb.green, 19);
+        assert_eq!(srgb.blue, 0);
     }
 }

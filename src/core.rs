@@ -102,7 +102,7 @@ pub struct Core {
     /// Whether the mouse cursor is currently over the window.
     pub(crate) window_hovered: bool,
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub(crate) sync_window_border_radii_to_theme: bool,
 }
 
@@ -163,7 +163,7 @@ impl Default for Core {
             exit_on_main_window_closed: true,
             menu_bars: HashMap::new(),
             window_hovered: false,
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             sync_window_border_radii_to_theme: true,
         }
     }
@@ -497,12 +497,12 @@ impl Core {
     }
 
     // TODO should we emit tasks setting the corner radius or unsetting it if this is changed?
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub fn set_sync_window_border_radii_to_theme(&mut self, sync: bool) {
         self.sync_window_border_radii_to_theme = sync;
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub fn sync_window_border_radii_to_theme(&self) -> bool {
         self.sync_window_border_radii_to_theme
     }

@@ -7,12 +7,8 @@
 pub mod portal;
 pub mod style;
 
-use cosmic_config::CosmicConfigEntry;
-use cosmic_config::config_subscription;
-use cosmic_theme::Component;
-use cosmic_theme::LayeredTheme;
-use cosmic_theme::Spacing;
-use cosmic_theme::ThemeMode;
+use cosmic_config::{CosmicConfigEntry, config_subscription};
+use cosmic_theme::{Component, LayeredTheme, Spacing, ThemeMode};
 use iced_futures::Subscription;
 use iced_runtime::{Appearance, DefaultStyle};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -153,7 +149,11 @@ pub fn system_preference() -> Theme {
     let Ok(is_dark) = ThemeMode::is_dark(&mode_config) else {
         return Theme::dark();
     };
-    let mut theme = if is_dark { system_dark() } else { system_light() };
+    let mut theme = if is_dark {
+        system_dark()
+    } else {
+        system_light()
+    };
     // The per-theme `is_dark` flag is not persisted in cosmic-config, so the
     // loaded theme can't be trusted to report dark/light correctly. Record the
     // preference we just read from `ThemeMode` so `is_dark()` reflects config.
@@ -314,7 +314,7 @@ impl DefaultStyle for Theme {
     fn default_style(&self) -> Appearance {
         let cosmic = self.cosmic();
         Appearance {
-            icon_color: cosmic.bg_color().into(),
+            icon_color: cosmic.on_bg_color().into(),
             background_color: cosmic.bg_color().into(),
             text_color: cosmic.on_bg_color().into(),
         }

@@ -1,20 +1,14 @@
 use std::any::Any;
 
+use iced_core::widget::Operation;
 use iced_core::window;
 
-use crate::{
-    Element,
-    iced::{
-        Event, Length, Point, Rectangle, Vector,
-        clipboard::dnd::{DndAction, DndEvent, SourceEvent},
-        event, mouse, overlay,
-    },
-    iced_core::{
-        self, Clipboard, Shell, layout, renderer,
-        widget::{Tree, tree},
-    },
-    widget::{Id, Widget, container},
-};
+use crate::Element;
+use crate::widget::{Id, Widget, container};
+use iced::clipboard::dnd::{DndAction, DndEvent, SourceEvent};
+use iced::{Event, Length, Point, Rectangle, Vector, event, mouse, overlay};
+use iced_core::widget::{Tree, tree};
+use iced_core::{self, Clipboard, Shell, layout, renderer};
 
 pub fn dnd_source<
     'a,
@@ -131,21 +125,25 @@ impl<
         );
     }
 
+    #[must_use]
     pub fn on_start(mut self, on_start: Option<Message>) -> Self {
         self.on_start = on_start;
         self
     }
 
+    #[must_use]
     pub fn on_cancel(mut self, on_cancelled: Option<Message>) -> Self {
         self.on_cancelled = on_cancelled;
         self
     }
 
+    #[must_use]
     pub fn on_finish(mut self, on_finish: Option<Message>) -> Self {
         self.on_finish = on_finish;
         self
     }
 
+    #[must_use]
     pub fn window(mut self, window: window::Id) -> Self {
         self.window = Some(window);
         self
@@ -164,7 +162,7 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
     }
 
     fn diff(&mut self, tree: &mut Tree) {
-        tree.children[0].diff(self.container.as_widget_mut());
+        tree.diff_children(std::slice::from_mut(&mut self.container));
     }
 
     fn state(&self) -> iced_core::widget::tree::State {
@@ -176,7 +174,7 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &crate::Renderer,
         limits: &layout::Limits,
@@ -184,41 +182,44 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
         let state = tree.state.downcast_mut::<State>();
         let node = self
             .container
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits);
         state.cached_bounds = node.bounds();
         node
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: layout::Layout<'_>,
         renderer: &crate::Renderer,
-        operation: &mut dyn iced_core::widget::Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        operation.custom((&mut tree.state) as &mut dyn Any, Some(&self.id));
-        operation.container(Some(&self.id), layout.bounds(), &mut |operation| {
-            self.container
-                .as_widget()
-                .operate(&mut tree.children[0], layout, renderer, operation)
-        });
+        operation.custom(
+            Some(&self.id),
+            layout.bounds(),
+            (&mut tree.state) as &mut dyn Any,
+        );
+
+        self.container
+            .as_widget_mut()
+            .operate(&mut tree.children[0], layout, renderer, operation);
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: layout::Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &crate::Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        let ret = self.container.as_widget_mut().on_event(
+    ) {
+        self.container.as_widget_mut().update(
             &mut tree.children[0],
-            event.clone(),
+            event,
             layout,
             cursor,
             renderer,
@@ -233,54 +234,48 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
             Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     if let Some(position) = cursor.position() {
-                        if !state.hovered {
-                            return ret;
+                        if !cursor.is_over(layout.bounds()) {
+                            return;
                         }
 
                         state.left_pressed_position = Some(position);
-                        return event::Status::Captured;
+                        shell.capture_event();
                     }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left)
                     if state.left_pressed_position.is_some() =>
                 {
                     state.left_pressed_position = None;
-                    return event::Status::Captured;
+                    shell.capture_event();
                 }
                 mouse::Event::CursorMoved { .. } => {
                     if let Some(position) = cursor.position() {
-                        if state.hovered {
-                            // We ignore motion if we do not possess drag content by now.
-                            if self.drag_content.is_none() {
-                                state.left_pressed_position = None;
-                                return ret;
-                            }
-                            if let Some(left_pressed_position) = state.left_pressed_position {
-                                if position.distance(left_pressed_position) > self.drag_threshold {
-                                    if let Some(on_start) = self.on_start.as_ref() {
-                                        shell.publish(on_start.clone())
-                                    }
-                                    let offset = Vector::new(
-                                        left_pressed_position.x - layout.bounds().x,
-                                        left_pressed_position.y - layout.bounds().y,
-                                    );
-                                    self.start_dnd(clipboard, state.cached_bounds, offset);
-                                    state.is_dragging = true;
-                                    state.left_pressed_position = None;
-                                }
-                            }
-                            if !cursor.is_over(layout.bounds()) {
-                                state.hovered = false;
-
-                                return ret;
-                            }
-                        } else if cursor.is_over(layout.bounds()) {
-                            state.hovered = true;
+                        // We ignore motion if we do not possess drag content by now.
+                        if self.drag_content.is_none() {
+                            state.left_pressed_position = None;
+                            return;
                         }
-                        return event::Status::Captured;
+                        if let Some(left_pressed_position) = state.left_pressed_position
+                            && position.distance(left_pressed_position) > self.drag_threshold
+                        {
+                            if let Some(on_start) = self.on_start.as_ref() {
+                                shell.publish(on_start.clone());
+                            }
+                            let offset = Vector::new(
+                                left_pressed_position.x - layout.bounds().x,
+                                left_pressed_position.y - layout.bounds().y,
+                            );
+                            self.start_dnd(clipboard, state.cached_bounds, offset);
+                            state.is_dragging = true;
+                            state.left_pressed_position = None;
+                        }
+                        if !cursor.is_over(layout.bounds()) {
+                            return;
+                        }
+                        shell.capture_event();
                     }
                 }
-                _ => return ret,
+                _ => (),
             },
             Event::Dnd(DndEvent::Source(SourceEvent::Cancelled)) => {
                 if state.is_dragging {
@@ -288,9 +283,8 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
                         shell.publish(m.clone());
                     }
                     state.is_dragging = false;
-                    return event::Status::Captured;
+                    shell.capture_event();
                 }
-                return ret;
             }
             Event::Dnd(DndEvent::Source(SourceEvent::Finished)) => {
                 if state.is_dragging {
@@ -298,13 +292,11 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
                         shell.publish(m.clone());
                     }
                     state.is_dragging = false;
-                    return event::Status::Captured;
+                    shell.capture_event();
                 }
-                return ret;
             }
-            _ => return ret,
+            _ => (),
         }
-        ret
     }
 
     fn mouse_interaction(
@@ -352,13 +344,18 @@ impl<Message: Clone + 'static, D: iced::clipboard::mime::AsMimeTypes + std::mark
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: layout::Layout<'_>,
+        layout: layout::Layout<'b>,
         renderer: &crate::Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
-        self.container
-            .as_widget_mut()
-            .overlay(&mut tree.children[0], layout, renderer, translation)
+        self.container.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn drag_destinations(
@@ -411,7 +408,6 @@ impl<
 /// Local state of the [`MouseListener`].
 #[derive(Debug, Default)]
 struct State {
-    hovered: bool,
     left_pressed_position: Option<Point>,
     is_dragging: bool,
     cached_bounds: Rectangle,

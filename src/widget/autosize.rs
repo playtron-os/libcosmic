@@ -1,12 +1,11 @@
 //! Autosize Container, which will resize the window to its contents.
 
 use iced_core::event::{self, Event};
-use iced_core::layout;
-use iced_core::mouse;
-use iced_core::overlay;
-use iced_core::renderer;
-use iced_core::widget::{Id, Tree};
-use iced_core::{Clipboard, Element, Layout, Length, Rectangle, Shell, Vector, Widget};
+use iced_core::widget::{Id, Operation, Tree};
+use iced_core::{
+    Clipboard, Element, Layout, Length, Rectangle, Shell, Vector, Widget, layout, mouse, overlay,
+    renderer,
+};
 pub use iced_widget::container::{Catalog, Style};
 
 pub fn autosize<'a, Message: 'static, Theme, E>(
@@ -107,7 +106,7 @@ where
     }
 
     fn diff(&mut self, tree: &mut Tree) {
-        tree.children[0].diff(&mut self.content);
+        tree.diff_children(std::slice::from_mut(&mut self.content));
     }
 
     fn size(&self) -> iced_core::Size<Length> {
@@ -115,7 +114,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
@@ -131,21 +130,22 @@ where
         }
         let node = self
             .content
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, &my_limits);
         let size = node.size();
         layout::Node::with_children(size, vec![node])
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn iced_core::widget::Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        operation.container(Some(&self.id), layout.bounds(), &mut |operation| {
-            self.content.as_widget().operate(
+        operation.container(Some(&self.id), layout.bounds());
+        operation.traverse(&mut |operation| {
+            self.content.as_widget_mut().operate(
                 &mut tree.children[0],
                 layout
                     .children()
@@ -158,18 +158,18 @@ where
         });
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor_position: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        #[cfg(feature = "wayland")]
+    ) {
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         if matches!(
             event,
             Event::PlatformSpecific(event::PlatformSpecific::Wayland(
@@ -179,9 +179,9 @@ where
             let bounds = layout.bounds().size();
             clipboard.request_logical_window_size(bounds.width.max(1.), bounds.height.max(1.));
         }
-        self.content.as_widget_mut().on_event(
+        self.content.as_widget_mut().update(
             &mut tree.children[0],
-            event.clone(),
+            event,
             layout
                 .children()
                 .next()
@@ -192,7 +192,7 @@ where
             clipboard,
             shell,
             viewport,
-        )
+        );
     }
 
     fn mouse_interaction(
@@ -238,8 +238,9 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
         self.content.as_widget_mut().overlay(
@@ -250,6 +251,7 @@ where
                 .unwrap()
                 .with_virtual_offset(layout.virtual_offset()),
             renderer,
+            viewport,
             translation,
         )
     }

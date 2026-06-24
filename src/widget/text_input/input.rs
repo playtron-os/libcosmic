@@ -22,23 +22,20 @@ use iced::Limits;
 use iced::clipboard::dnd::{DndAction, DndEvent, OfferEvent, SourceEvent};
 use iced::clipboard::mime::AsMimeTypes;
 use iced_core::event::{self, Event};
+use iced_core::input_method::{self, InputMethod, Preedit};
 use iced_core::mouse::{self, click};
 use iced_core::overlay::Group;
 use iced_core::renderer::{self, Renderer as CoreRenderer};
-use iced_core::text::{self, Paragraph, Renderer, Text};
+use iced_core::text::{self, Affinity, Paragraph, Renderer, Text};
 use iced_core::time::{Duration, Instant};
-use iced_core::touch;
 use iced_core::widget::Id;
 use iced_core::widget::operation::{self, Operation};
 use iced_core::widget::tree::{self, Tree};
-use iced_core::window;
-use iced_core::{Background, alignment};
-use iced_core::{Border, Shadow, keyboard};
 use iced_core::{
-    Clipboard, Color, Element, Layout, Length, Padding, Pixels, Point, Rectangle, Shell, Size,
-    Vector, Widget,
+    Background, Border, Clipboard, Color, Element, Layout, Length, Padding, Pixels, Point,
+    Rectangle, Shadow, Shell, Size, Vector, Widget, alignment, keyboard, layout, overlay, touch,
+    window,
 };
-use iced_core::{layout, overlay};
 use iced_runtime::{Action, Task, task};
 
 thread_local! {
@@ -66,18 +63,20 @@ pub fn editable_input<'a, Message: Clone + 'static>(
     editing: bool,
     on_toggle_edit: impl Fn(bool) -> Message + 'a,
 ) -> TextInput<'a, Message> {
-    let icon = crate::widget::icon::from_name(if editing {
-        "edit-clear-symbolic"
-    } else {
-        "edit-symbolic"
-    });
-
+    // The trailing icon is a placeholder; diff() rebuilds it reactively
+    // based on the current is_read_only state and value content.
     TextInput::new(placeholder, text)
         .style(crate::theme::TextInput::EditableText)
         .editable()
         .editing(editing)
         .on_toggle_edit(on_toggle_edit)
-        .trailing_icon(icon.size(16).into())
+        .trailing_icon(
+            crate::widget::icon::from_name("edit-symbolic")
+                .size(16)
+                .apply(crate::widget::container)
+                .padding(8)
+                .into(),
+        )
 }
 
 /// Creates a new search [`TextInput`].
@@ -185,6 +184,7 @@ pub struct TextInput<'a, Message> {
     is_editable_variant: bool,
     is_read_only: bool,
     select_on_focus: bool,
+    double_click_select_delimiter: Option<char>,
     font: Option<<crate::Renderer as iced_core::text::Renderer>::Font>,
     width: Length,
     padding: Padding,
@@ -235,6 +235,7 @@ where
             is_editable_variant: false,
             is_read_only: false,
             select_on_focus: false,
+            double_click_select_delimiter: None,
             font: None,
             width: Length::Fill,
             padding: spacing.into(),
@@ -337,6 +338,17 @@ where
     #[inline]
     pub const fn select_on_focus(mut self, select_on_focus: bool) -> Self {
         self.select_on_focus = select_on_focus;
+        self
+    }
+
+    /// Sets a delimiter character for double-click selection behavior.
+    ///
+    /// When set, double-clicking before the last occurrence of this character
+    /// selects from the start to that character. Double-clicking after the
+    /// delimiter uses normal word selection.
+    #[inline]
+    pub const fn double_click_select_delimiter(mut self, delimiter: char) -> Self {
+        self.double_click_select_delimiter = Some(delimiter);
         self
     }
 
@@ -513,7 +525,7 @@ where
     }
 
     /// Sets the start dnd handler of the [`TextInput`].
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub fn on_start_dnd(mut self, on_start_dnd: impl Fn(State) -> Message + 'a) -> Self {
         self.on_create_dnd_source = Some(Box::new(on_start_dnd));
         self
@@ -595,6 +607,7 @@ where
             self.value = state.tracked_value.clone();
             // std::mem::swap(&mut state.tracked_value, &mut self.value);
         }
+        state.double_click_select_delimiter = self.double_click_select_delimiter;
         // Unfocus text input if it becomes disabled
         if self.on_input.is_none() && !self.manage_value {
             state.last_click = None;
@@ -651,11 +664,11 @@ where
 
         // if the previous state was at the end of the text, keep it there
         let old_value = Value::new(&old_value);
-        if state.is_focused() {
-            if let cursor::State::Index(index) = state.cursor.state(&old_value) {
-                if index == old_value.len() {
-                    state.cursor.move_to(self.value.len());
-                }
+        if state.is_focused()
+            && let cursor::State::Index(index) = state.cursor.state(&old_value)
+        {
+            if index == old_value.len() {
+                state.cursor.move_to(self.value.len());
             }
         }
 
@@ -666,7 +679,36 @@ where
             }
         }
 
-        self.is_read_only = state.is_read_only;
+        if self.is_editable_variant {
+            if !state.is_focused() {
+                // Not yet interacted, use the widget's value
+                state.is_read_only = self.is_read_only;
+            } else {
+                // Already interacted, use the state
+                self.is_read_only = state.is_read_only;
+            }
+
+            let editing = !self.is_read_only;
+            let icon_name = if editing {
+                if self.value.is_empty() {
+                    "window-close-symbolic"
+                } else {
+                    "edit-clear-symbolic"
+                }
+            } else {
+                "edit-symbolic"
+            };
+
+            self.trailing_icon = Some(
+                crate::widget::icon::from_name(icon_name)
+                    .size(16)
+                    .apply(crate::widget::container)
+                    .padding(8)
+                    .into(),
+            );
+        } else {
+            self.is_read_only = state.is_read_only;
+        }
 
         // Stop pasting if input becomes disabled
         if !self.manage_value && self.on_input.is_none() {
@@ -699,7 +741,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &crate::Renderer,
         limits: &layout::Limits,
@@ -711,7 +753,7 @@ where
 
             let size = self.size.unwrap_or_else(|| renderer.default_size().0);
 
-            let bounds = limits.resolve(Length::Shrink, Length::Fill, Size::INFINITY);
+            let bounds = limits.resolve(Length::Shrink, Length::Fill, Size::INFINITE);
             let value_paragraph = &mut state.value;
             let v = self.value.to_string();
             value_paragraph.update(Text {
@@ -723,12 +765,13 @@ where
                 font,
                 bounds,
                 size: iced::Pixels(size),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Center,
+                align_x: text::Alignment::Left,
+                align_y: alignment::Vertical::Center,
                 line_height: text::LineHeight::default(),
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::None,
             });
 
             let Size { width, height } =
@@ -743,8 +786,8 @@ where
                 self.width,
                 self.padding,
                 self.size,
-                self.leading_icon.as_ref(),
-                self.trailing_icon.as_ref(),
+                self.leading_icon.as_mut(),
+                self.trailing_icon.as_mut(),
                 self.line_height,
                 self.label.as_deref(),
                 self.helper_text.as_deref(),
@@ -780,24 +823,25 @@ where
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
-        _layout: Layout<'_>,
-        _renderer: &crate::Renderer,
-        operation: &mut dyn Operation<()>,
+        layout: Layout<'_>,
+        renderer: &crate::Renderer,
+        operation: &mut dyn Operation,
     ) {
+        operation.container(Some(&self.id), layout.bounds());
         let state = tree.state.downcast_mut::<State>();
 
-        operation.custom(state, Some(&self.id));
-        operation.focusable(state, Some(&self.id));
-        operation.text_input(state, Some(&self.id));
+        operation.focusable(Some(&self.id), layout.bounds(), state);
+        operation.text_input(Some(&self.id), layout.bounds(), state);
     }
 
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &crate::Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
         let mut layout_ = Vec::with_capacity(2);
@@ -823,24 +867,24 @@ where
             .filter_map(|((child, state), layout)| {
                 child
                     .as_widget_mut()
-                    .overlay(state, layout, renderer, translation)
+                    .overlay(state, layout, renderer, viewport, translation)
             })
             .collect::<Vec<_>>();
 
         (!children.is_empty()).then(|| Group::with_children(children).overlay())
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor_position: mouse::Cursor,
         renderer: &crate::Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         let text_layout = self.text_layout(layout);
         let mut trailing_icon_layout = None;
         let font = self.font.unwrap_or_else(|| renderer.default_font());
@@ -854,9 +898,6 @@ where
                 if !state.is_read_only && state.is_focused.is_some_and(|f| !f.focused) {
                     state.is_read_only = true;
                     shell.publish((on_edit)(false));
-                } else if state.is_focused() && state.is_read_only {
-                    state.is_read_only = false;
-                    shell.publish((on_edit)(true));
                 } else if let Some(f) = state.is_focused.as_mut().filter(|f| f.needs_update) {
                     // TODO do we want to just move this to on_focus or on_unfocus for all inputs?
                     f.needs_update = false;
@@ -877,9 +918,9 @@ where
                 // Enable custom buttons defined on the trailing icon position to be handled.
                 if !self.is_editable_variant {
                     if let Some(trailing_layout) = trailing_icon_layout {
-                        let res = trailing_icon.as_widget_mut().on_event(
+                        let res = trailing_icon.as_widget_mut().update(
                             tree,
-                            event.clone(),
+                            event,
                             trailing_layout,
                             cursor_position,
                             renderer,
@@ -888,8 +929,8 @@ where
                             viewport,
                         );
 
-                        if res == event::Status::Captured {
-                            return res;
+                        if shell.is_event_captured() {
+                            return;
                         }
                     }
                 }
@@ -934,7 +975,20 @@ where
             layout,
             self.manage_value,
             self.drag_threshold,
-        )
+            self.always_active,
+        );
+
+        let state = tree.state.downcast_mut::<State>();
+        let value = if self.is_secure {
+            self.value.secure()
+        } else {
+            self.value.clone()
+        };
+        state.scroll_offset = offset(
+            text_layout.children().next().unwrap().bounds(),
+            &value,
+            state,
+        );
     }
 
     #[inline]
@@ -1004,9 +1058,7 @@ where
             index += 1;
         }
 
-        if let (Some(trailing_icon), Some(tree)) =
-            (self.trailing_icon.as_ref(), state.children.get(index))
-        {
+        if self.trailing_icon.is_some() {
             let mut children = layout.children();
             children.next();
             // skip if there is no leading icon
@@ -1016,13 +1068,21 @@ where
             let trailing_icon_layout = children.next().unwrap();
 
             if cursor_position.is_over(trailing_icon_layout.bounds()) {
-                return trailing_icon.as_widget().mouse_interaction(
-                    tree,
-                    layout,
-                    cursor_position,
-                    viewport,
-                    renderer,
-                );
+                if self.is_editable_variant {
+                    return mouse::Interaction::Pointer;
+                }
+
+                if let Some((trailing_icon, tree)) =
+                    self.trailing_icon.as_ref().zip(state.children.get(index))
+                {
+                    return trailing_icon.as_widget().mouse_interaction(
+                        tree,
+                        layout,
+                        cursor_position,
+                        viewport,
+                        renderer,
+                    );
+                }
             }
         }
         let mut children = layout.children();
@@ -1123,6 +1183,22 @@ pub fn select_all<Message: 'static>(id: Id) -> Task<Message> {
     task::effect(Action::widget(operation::text_input::select_all(id)))
 }
 
+/// Produces a [`Task`] that selects a range of the content of the [`TextInput`] with the given
+/// [`Id`].
+pub fn select_range<Message: 'static>(id: Id, start: usize, end: usize) -> Task<Message> {
+    task::effect(Action::widget(operation::text_input::select_range(
+        id, start, end,
+    )))
+}
+
+/// Produces a [`Task`] that selects from the front to the last occurrence of the given character
+/// in the [`TextInput`] with the given [`Id`], or selects all if not found.
+pub fn select_until_last<Message: 'static>(id: Id, value: &str, ch: char) -> Task<Message> {
+    let v = Value::new(value);
+    let end = v.rfind_char(ch).unwrap_or(v.len());
+    select_range(id, 0, end)
+}
+
 /// Computes the layout of a [`TextInput`].
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::too_many_arguments)]
@@ -1133,8 +1209,8 @@ pub fn layout<Message>(
     width: Length,
     padding: Padding,
     size: Option<f32>,
-    leading_icon: Option<&Element<'_, Message, crate::Theme, crate::Renderer>>,
-    trailing_icon: Option<&Element<'_, Message, crate::Theme, crate::Renderer>>,
+    leading_icon: Option<&mut Element<'_, Message, crate::Theme, crate::Renderer>>,
+    trailing_icon: Option<&mut Element<'_, Message, crate::Theme, crate::Renderer>>,
     line_height: text::LineHeight,
     label: Option<&str>,
     helper_text: Option<&str>,
@@ -1148,7 +1224,7 @@ pub fn layout<Message>(
     let mut nodes = Vec::with_capacity(3);
 
     let text_pos = if let Some(label) = label {
-        let text_bounds = limits.resolve(width, Length::Shrink, Size::INFINITY);
+        let text_bounds = limits.resolve(width, Length::Shrink, Size::INFINITE);
         let state = tree.state.downcast_mut::<State>();
         let label_paragraph = &mut state.label;
         label_paragraph.update(Text {
@@ -1156,12 +1232,13 @@ pub fn layout<Message>(
             font,
             bounds: text_bounds,
             size: iced::Pixels(size.unwrap_or_else(|| renderer.default_size().0)),
-            horizontal_alignment: alignment::Horizontal::Left,
-            vertical_alignment: alignment::Vertical::Center,
+            align_x: text::Alignment::Left,
+            align_y: alignment::Vertical::Center,
             line_height,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
             letter_spacing: None,
+            ellipsize: text::Ellipsize::None,
         });
         let label_size = label_paragraph.min_bounds();
 
@@ -1186,7 +1263,7 @@ pub fn layout<Message>(
         let (leading_icon_width, mut leading_icon) =
             if let Some((icon, tree)) = leading_icon.zip(children.get_mut(c_i)) {
                 let size = icon.as_widget().size();
-                let icon_node = icon.as_widget().layout(
+                let icon_node = icon.as_widget_mut().layout(
                     tree,
                     renderer,
                     &Limits::NONE.width(size.width).height(size.height),
@@ -1201,7 +1278,7 @@ pub fn layout<Message>(
         let (trailing_icon_width, mut trailing_icon) =
             if let Some((icon, tree)) = trailing_icon.zip(children.get_mut(c_i)) {
                 let size = icon.as_widget().size();
-                let icon_node = icon.as_widget().layout(
+                let icon_node = icon.as_widget_mut().layout(
                     tree,
                     renderer,
                     &Limits::NONE.width(size.width).height(size.height),
@@ -1214,7 +1291,7 @@ pub fn layout<Message>(
         let text_limits = limits
             .width(width)
             .height(line_height.to_absolute(text_size.into()));
-        let text_bounds = text_limits.resolve(Length::Shrink, Length::Shrink, Size::INFINITY);
+        let text_bounds = text_limits.resolve(Length::Shrink, Length::Shrink, Size::INFINITE);
         let text_node = layout::Node::new(
             text_bounds - Size::new(leading_icon_width + trailing_icon_width, 0.0),
         )
@@ -1266,9 +1343,9 @@ pub fn layout<Message>(
     } else {
         let limits = limits
             .width(width)
-            .height(text_input_height + padding.vertical())
+            .height(text_input_height + padding.y())
             .shrink(padding);
-        let text_bounds = limits.resolve(Length::Shrink, Length::Shrink, Size::INFINITY);
+        let text_bounds = limits.resolve(Length::Shrink, Length::Shrink, Size::INFINITE);
 
         let text = layout::Node::new(text_bounds).move_to(Point::new(padding.left, padding.top));
 
@@ -1286,7 +1363,7 @@ pub fn layout<Message>(
             .width(width)
             .shrink(padding)
             .height(helper_text_line_height.to_absolute(helper_text_size.into()));
-        let text_bounds = limits.resolve(width, Length::Shrink, Size::INFINITY);
+        let text_bounds = limits.resolve(width, Length::Shrink, Size::INFINITE);
         let state = tree.state.downcast_mut::<State>();
         let helper_text_paragraph = &mut state.helper_text;
         helper_text_paragraph.update(Text {
@@ -1294,12 +1371,13 @@ pub fn layout<Message>(
             font,
             bounds: text_bounds,
             size: iced::Pixels(helper_text_size),
-            horizontal_alignment: alignment::Horizontal::Left,
-            vertical_alignment: alignment::Vertical::Center,
+            align_x: text::Alignment::Left,
+            align_y: alignment::Vertical::Center,
             line_height: helper_text_line_height,
             shaping: text::Shaping::Advanced,
             wrapping: text::Wrapping::None,
             letter_spacing: None,
+            ellipsize: text::Ellipsize::None,
         });
         let helper_text_size = helper_text_paragraph.min_bounds();
         let helper_text_node = layout::Node::new(helper_text_size).translate(helper_pos);
@@ -1332,7 +1410,7 @@ pub fn layout<Message>(
 #[allow(clippy::cast_possible_truncation)]
 pub fn update<'a, Message: Clone + 'static>(
     id: Option<Id>,
-    event: Event,
+    event: &Event,
     text_layout: Layout<'_>,
     edit_button_layout: Option<Layout<'_>>,
     cursor: mouse::Cursor,
@@ -1357,7 +1435,8 @@ pub fn update<'a, Message: Clone + 'static>(
     layout: Layout<'_>,
     manage_value: bool,
     drag_threshold: f32,
-) -> event::Status {
+    always_active: bool,
+) {
     let update_cache = |state, value| {
         replace_paragraph(
             state,
@@ -1403,27 +1482,71 @@ pub fn update<'a, Message: Clone + 'static>(
                     && edit_button_layout.is_some_and(|l| cursor.is_over(l.bounds()))
                 {
                     if is_editable_variant {
-                        state.is_read_only = !state.is_read_only;
-                        state.move_cursor_to_end();
+                        let has_content = !unsecured_value.is_empty();
+                        let is_editing = !state.is_read_only;
 
-                        if let Some(on_toggle_edit) = on_toggle_edit {
-                            shell.publish(on_toggle_edit(!state.is_read_only));
+                        if is_editing && has_content {
+                            if let Some(on_input) = on_input {
+                                shell.publish((on_input)(String::new()));
+                            }
+
+                            if manage_value {
+                                *unsecured_value = Value::new("");
+                                state.tracked_value = unsecured_value.clone();
+
+                                let cleared_value = if is_secure {
+                                    unsecured_value.secure()
+                                } else {
+                                    unsecured_value.clone()
+                                };
+
+                                update_cache(state, &cleared_value);
+                            }
+
+                            state.move_cursor_to_end();
+                        } else if is_editing {
+                            // Close: toggle back to read-only and unfocus.
+                            state.is_read_only = true;
+                            state.unfocus();
+
+                            if let Some(on_toggle_edit) = on_toggle_edit {
+                                shell.publish(on_toggle_edit(false));
+                            }
+                        } else {
+                            // Edit: toggle to editing, select all, and focus.
+                            state.is_read_only = false;
+                            state.cursor.select_range(0, value.len());
+
+                            if let Some(on_toggle_edit) = on_toggle_edit {
+                                shell.publish(on_toggle_edit(true));
+                            }
+
+                            let now = Instant::now();
+                            LAST_FOCUS_UPDATE.with(|x| x.set(now));
+                            state.is_focused = Some(Focus {
+                                updated_at: now,
+                                now,
+                                focused: true,
+                                needs_update: false,
+                            });
                         }
-
-                        let now = Instant::now();
-                        LAST_FOCUS_UPDATE.with(|x| x.set(now));
-                        state.is_focused = Some(Focus {
-                            updated_at: now,
-                            now,
-                            focused: true,
-                            needs_update: false,
-                        });
                     }
 
-                    return event::Status::Captured;
+                    shell.capture_event();
+                    return;
                 }
 
-                let target = cursor_position.x - text_layout.bounds().x;
+                let target = {
+                    let text_bounds = text_layout.bounds();
+
+                    let alignment_offset = alignment_offset(
+                        text_bounds.width,
+                        state.value.raw().min_width(),
+                        effective_alignment(state.value.raw()),
+                    );
+
+                    cursor_position.x - text_bounds.x - alignment_offset
+                };
 
                 let click =
                     mouse::Click::new(cursor_position, mouse::Button::Left, state.last_click);
@@ -1433,7 +1556,7 @@ pub fn update<'a, Message: Clone + 'static>(
                     click.kind(),
                     state.cursor().state(value),
                 ) {
-                    #[cfg(feature = "wayland")]
+                    #[cfg(all(feature = "wayland", target_os = "linux"))]
                     (None, click::Kind::Single, cursor::State::Selection { start, end }) => {
                         let left = start.min(end);
                         let right = end.max(start);
@@ -1442,17 +1565,30 @@ pub fn update<'a, Message: Clone + 'static>(
                             state.value.raw(),
                             text_layout.bounds(),
                             left,
+                            value,
+                            state.cursor.affinity(),
+                            state.scroll_offset,
                         );
 
                         let (right_position, _right_offset) = measure_cursor_and_scroll_offset(
                             state.value.raw(),
                             text_layout.bounds(),
                             right,
+                            value,
+                            state.cursor.affinity(),
+                            state.scroll_offset,
                         );
 
-                        let width = right_position - left_position;
+                        let selection_start = left_position.min(right_position);
+                        let width = (right_position - left_position).abs();
+                        let alignment_offset = alignment_offset(
+                            text_layout.bounds().width,
+                            state.value.raw().min_width(),
+                            effective_alignment(state.value.raw()),
+                        );
                         let selection_bounds = Rectangle {
-                            x: text_layout.bounds().x + left_position,
+                            x: text_layout.bounds().x + alignment_offset + selection_start
+                                - state.scroll_offset,
                             y: text_layout.bounds().y,
                             width,
                             height: text_layout.bounds().height,
@@ -1461,13 +1597,15 @@ pub fn update<'a, Message: Clone + 'static>(
                         if cursor.is_over(selection_bounds) && (on_input.is_some() || manage_value)
                         {
                             state.dragging_state = Some(DraggingState::PrepareDnd(cursor_position));
-                            return event::Status::Captured;
+                            shell.capture_event();
+                            return;
                         }
                         // clear selection and place cursor at click position
                         update_cache(state, value);
                         state.setting_selection(value, text_layout.bounds(), target);
                         state.dragging_state = None;
-                        return event::Status::Captured;
+                        shell.capture_event();
+                        return;
                     }
                     (None, click::Kind::Single, _) => {
                         state.setting_selection(value, text_layout.bounds(), target);
@@ -1478,14 +1616,28 @@ pub fn update<'a, Message: Clone + 'static>(
                         if is_secure {
                             state.cursor.select_all(value);
                         } else {
-                            let position =
+                            let (position, affinity) =
                                 find_cursor_position(text_layout.bounds(), value, state, target)
-                                    .unwrap_or(0);
+                                    .unwrap_or((0, text::Affinity::Before));
 
-                            state.cursor.select_range(
-                                value.previous_start_of_word(position),
-                                value.next_end_of_word(position),
-                            );
+                            state.cursor.set_affinity(affinity);
+
+                            if let Some(delimiter) = state.double_click_select_delimiter {
+                                if let Some(delim_pos) = value.rfind_char(delimiter) {
+                                    if position <= delim_pos {
+                                        state.cursor.select_range(0, delim_pos);
+                                    } else {
+                                        state.cursor.select_range(delim_pos + 1, value.len());
+                                    }
+                                } else {
+                                    state.cursor.select_all(value);
+                                }
+                            } else {
+                                state.cursor.select_range(
+                                    value.previous_start_of_word(position),
+                                    value.next_end_of_word(position),
+                                );
+                            }
                         }
                         state.dragging_state = Some(DraggingState::Selection);
                     }
@@ -1500,15 +1652,18 @@ pub fn update<'a, Message: Clone + 'static>(
                 }
 
                 // Focus on click of the text input, and ensure that the input is writable.
-                if !state.is_focused()
-                    && matches!(state.dragging_state, None | Some(DraggingState::Selection))
+                if matches!(state.dragging_state, None | Some(DraggingState::Selection))
+                    && (!state.is_focused() || (is_editable_variant && state.is_read_only))
                 {
-                    if let Some(on_focus) = on_focus {
-                        shell.publish(on_focus.clone());
+                    if !state.is_focused() {
+                        if let Some(on_focus) = on_focus {
+                            shell.publish(on_focus.clone());
+                        }
                     }
 
                     if state.is_read_only {
                         state.is_read_only = false;
+                        state.cursor.select_range(0, value.len());
                         if let Some(on_toggle_edit) = on_toggle_edit {
                             let message = (on_toggle_edit)(true);
                             shell.publish(message);
@@ -1528,7 +1683,8 @@ pub fn update<'a, Message: Clone + 'static>(
 
                 state.last_click = Some(click);
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             } else {
                 state.unfocus();
 
@@ -1541,41 +1697,62 @@ pub fn update<'a, Message: Clone + 'static>(
         | Event::Touch(touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. }) => {
             cold();
             let state = state();
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             if matches!(state.dragging_state, Some(DraggingState::PrepareDnd(_))) {
                 // clear selection and place cursor at click position
                 update_cache(state, value);
                 if let Some(position) = cursor.position_over(layout.bounds()) {
-                    let target = position.x - text_layout.bounds().x;
+                    let target = {
+                        let text_bounds = text_layout.bounds();
+
+                        let alignment_offset = alignment_offset(
+                            text_bounds.width,
+                            state.value.raw().min_width(),
+                            effective_alignment(state.value.raw()),
+                        );
+
+                        position.x - text_bounds.x - alignment_offset
+                    };
                     state.setting_selection(value, text_layout.bounds(), target);
                 }
             }
             state.dragging_state = None;
-
-            return if cursor.is_over(layout.bounds()) {
-                event::Status::Captured
-            } else {
-                event::Status::Ignored
-            };
+            if cursor.is_over(layout.bounds()) {
+                shell.capture_event();
+            }
+            return;
         }
         Event::Mouse(mouse::Event::CursorMoved { position })
         | Event::Touch(touch::Event::FingerMoved { position, .. }) => {
             let state = state();
 
             if matches!(state.dragging_state, Some(DraggingState::Selection)) {
-                let target = position.x - text_layout.bounds().x;
+                let target = {
+                    let text_bounds = text_layout.bounds();
+
+                    let alignment_offset = alignment_offset(
+                        text_bounds.width,
+                        state.value.raw().min_width(),
+                        effective_alignment(state.value.raw()),
+                    );
+
+                    position.x - text_bounds.x - alignment_offset
+                };
 
                 update_cache(state, value);
-                let position =
-                    find_cursor_position(text_layout.bounds(), value, state, target).unwrap_or(0);
+                let (position, affinity) =
+                    find_cursor_position(text_layout.bounds(), value, state, target)
+                        .unwrap_or((0, text::Affinity::Before));
 
+                state.cursor.set_affinity(affinity);
                 state
                     .cursor
                     .select_range(state.cursor.start(value), position);
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             if let Some(DraggingState::PrepareDnd(start_position)) = state.dragging_state {
                 let distance = ((position.x - start_position.x).powi(2)
                     + (position.y - start_position.y).powi(2))
@@ -1583,7 +1760,7 @@ pub fn update<'a, Message: Clone + 'static>(
 
                 if distance >= drag_threshold {
                     if is_secure {
-                        return event::Status::Ignored;
+                        return;
                     }
 
                     let input_text = state.selected_text(&value.to_string()).unwrap_or_default();
@@ -1625,7 +1802,8 @@ pub fn update<'a, Message: Clone + 'static>(
                     state.dragging_state = Some(DraggingState::PrepareDnd(start_position));
                 }
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
         }
         Event::Keyboard(keyboard::Event::KeyPressed {
@@ -1636,23 +1814,33 @@ pub fn update<'a, Message: Clone + 'static>(
             ..
         }) => {
             let state = state();
-            state.keyboard_modifiers = modifiers;
+            state.keyboard_modifiers = *modifiers;
 
             if let Some(focus) = state.is_focused.as_mut().filter(|f| f.focused) {
                 if state.is_read_only || (!manage_value && on_input.is_none()) {
-                    return event::Status::Ignored;
+                    return;
                 };
                 let modifiers = state.keyboard_modifiers;
                 focus.updated_at = Instant::now();
                 LAST_FOCUS_UPDATE.with(|x| x.set(focus.updated_at));
 
-                // Check if Ctrl+A/C/V/X was pressed.
-                if state.keyboard_modifiers == keyboard::Modifiers::COMMAND
-                    || state.keyboard_modifiers
-                        == keyboard::Modifiers::COMMAND | keyboard::Modifiers::CAPS_LOCK
+                // Ctrl/Command+A/C/V/X, plus the traditional alternate clipboard
+                let clip_key = match key.as_ref() {
+                    keyboard::Key::Named(keyboard::key::Named::Insert) if modifiers.shift() => {
+                        Some('v')
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Insert) if modifiers.command() => {
+                        Some('c')
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Delete) if modifiers.shift() => {
+                        Some('x')
+                    }
+                    _ if modifiers.command() => key.to_latin(*physical_key),
+                    _ => None,
+                };
                 {
-                    match key.as_ref() {
-                        keyboard::Key::Character("c") | keyboard::Key::Character("C") => {
+                    match clip_key {
+                        Some('c') => {
                             if !is_secure {
                                 if let Some((start, end)) = state.cursor.selection(value) {
                                     clipboard.write(
@@ -1664,7 +1852,7 @@ pub fn update<'a, Message: Clone + 'static>(
                         }
                         // XXX if we want to allow cutting of secure text, we need to
                         // update the cache and decide which value to cut
-                        keyboard::Key::Character("x") | keyboard::Key::Character("X") => {
+                        Some('x') => {
                             if !is_secure {
                                 if let Some((start, end)) = state.cursor.selection(value) {
                                     clipboard.write(
@@ -1683,7 +1871,7 @@ pub fn update<'a, Message: Clone + 'static>(
                                 }
                             }
                         }
-                        keyboard::Key::Character("v") | keyboard::Key::Character("V") => {
+                        Some('v') => {
                             let content = if let Some(content) = state.is_pasting.take() {
                                 content
                             } else {
@@ -1724,12 +1912,14 @@ pub fn update<'a, Message: Clone + 'static>(
                             };
 
                             update_cache(state, &value);
-                            return event::Status::Captured;
+                            shell.capture_event();
+                            return;
                         }
 
-                        keyboard::Key::Character("a") | keyboard::Key::Character("A") => {
+                        Some('a') => {
                             state.cursor.select_all(value);
-                            return event::Status::Captured;
+                            shell.capture_event();
+                            return;
                         }
 
                         _ => {}
@@ -1737,9 +1927,12 @@ pub fn update<'a, Message: Clone + 'static>(
                 }
 
                 // Capture keyboard inputs that should be submitted.
-                if let Some(c) = text.and_then(|t| t.chars().next().filter(|c| !c.is_control())) {
+                if let Some(c) = text
+                    .as_ref()
+                    .and_then(|t| t.chars().next().filter(|c| !c.is_control()))
+                {
                     if state.is_read_only || (!manage_value && on_input.is_none()) {
-                        return event::Status::Ignored;
+                        return;
                     };
 
                     state.is_pasting = None;
@@ -1769,7 +1962,8 @@ pub fn update<'a, Message: Clone + 'static>(
 
                         update_cache(state, &value);
 
-                        return event::Status::Captured;
+                        shell.capture_event();
+                        return;
                     }
                 }
 
@@ -1839,29 +2033,23 @@ pub fn update<'a, Message: Clone + 'static>(
                         update_cache(state, &value);
                     }
                     keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
-                        if platform::is_jump_modifier_pressed(modifiers) && !is_secure {
-                            if modifiers.shift() {
-                                state.cursor.select_left_by_words(value);
-                            } else {
-                                state.cursor.move_left_by_words(value);
-                            }
-                        } else if modifiers.shift() {
-                            state.cursor.select_left(value);
+                        let rtl = state.value.raw().is_rtl(0).unwrap_or(false);
+                        let by_words = platform::is_jump_modifier_pressed(modifiers) && !is_secure;
+
+                        if modifiers.shift() {
+                            state.cursor.select_visual(false, by_words, rtl, value);
                         } else {
-                            state.cursor.move_left(value);
+                            state.cursor.move_visual(false, by_words, rtl, value);
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
-                        if platform::is_jump_modifier_pressed(modifiers) && !is_secure {
-                            if modifiers.shift() {
-                                state.cursor.select_right_by_words(value);
-                            } else {
-                                state.cursor.move_right_by_words(value);
-                            }
-                        } else if modifiers.shift() {
-                            state.cursor.select_right(value);
+                        let rtl = state.value.raw().is_rtl(0).unwrap_or(false);
+                        let by_words = platform::is_jump_modifier_pressed(modifiers) && !is_secure;
+
+                        if modifiers.shift() {
+                            state.cursor.select_visual(true, by_words, rtl, value);
                         } else {
-                            state.cursor.move_right(value);
+                            state.cursor.move_visual(true, by_words, rtl, value);
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Home) => {
@@ -1902,19 +2090,20 @@ pub fn update<'a, Message: Clone + 'static>(
                                 shell.publish(on_unfocus.clone());
                             }
 
-                            return event::Status::Ignored;
+                            return;
                         };
                     }
 
                     keyboard::Key::Named(
                         keyboard::key::Named::ArrowUp | keyboard::key::Named::ArrowDown,
                     ) => {
-                        return event::Status::Ignored;
+                        return;
                     }
                     _ => {}
                 }
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
         }
         Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => {
@@ -1928,44 +2117,110 @@ pub fn update<'a, Message: Clone + 'static>(
                     keyboard::Key::Named(keyboard::key::Named::Tab)
                     | keyboard::Key::Named(keyboard::key::Named::ArrowUp)
                     | keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
-                        return event::Status::Ignored;
+                        return;
                     }
                     _ => {}
                 }
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
         }
         Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
             let state = state();
 
-            state.keyboard_modifiers = modifiers;
+            state.keyboard_modifiers = *modifiers;
+        }
+        Event::InputMethod(event) => {
+            let state = state();
+
+            match event {
+                input_method::Event::Opened | input_method::Event::Closed => {
+                    state.preedit = matches!(event, input_method::Event::Opened)
+                        .then(input_method::Preedit::new);
+                    shell.capture_event();
+                    return;
+                }
+                input_method::Event::Preedit(content, selection) => {
+                    if state.is_focused() {
+                        state.preedit = Some(input_method::Preedit {
+                            content: content.to_owned(),
+                            selection: selection.clone(),
+                            text_size: Some(size.into()),
+                        });
+                        shell.capture_event();
+                        return;
+                    }
+                }
+                input_method::Event::Commit(text) => {
+                    let Some(focus) = state.is_focused.as_mut().filter(|f| f.focused) else {
+                        return;
+                    };
+                    let Some(on_input) = on_input else {
+                        return;
+                    };
+                    if state.is_read_only {
+                        return;
+                    }
+
+                    focus.updated_at = Instant::now();
+                    LAST_FOCUS_UPDATE.with(|x| x.set(focus.updated_at));
+
+                    let mut editor = Editor::new(unsecured_value, &mut state.cursor);
+                    editor.paste(Value::new(&text));
+
+                    let contents = editor.contents();
+                    let unsecured_value = Value::new(&contents);
+                    let message = if let Some(paste) = &on_paste {
+                        (paste)(contents)
+                    } else {
+                        (on_input)(contents)
+                    };
+                    shell.publish(message);
+
+                    state.is_pasting = None;
+                    let value = if is_secure {
+                        unsecured_value.secure()
+                    } else {
+                        unsecured_value
+                    };
+
+                    update_cache(state, &value);
+                    shell.capture_event();
+                    return;
+                }
+            }
         }
         Event::Window(window::Event::RedrawRequested(now)) => {
             let state = state();
 
             if let Some(focus) = state.is_focused.as_mut().filter(|f| f.focused) {
-                focus.now = now;
+                focus.now = *now;
 
                 let millis_until_redraw = CURSOR_BLINK_INTERVAL_MILLIS
-                    - (now - focus.updated_at).as_millis() % CURSOR_BLINK_INTERVAL_MILLIS;
-
-                shell.request_redraw(window::RedrawRequest::At(
-                    now + Duration::from_millis(u64::try_from(millis_until_redraw).unwrap()),
+                    - (*now - focus.updated_at).as_millis() % CURSOR_BLINK_INTERVAL_MILLIS;
+                shell.request_redraw_at(window::RedrawRequest::At(
+                    now.checked_add(Duration::from_millis(millis_until_redraw as u64))
+                        .unwrap_or(*now),
                 ));
+
+                shell.request_input_method(&input_method(state, text_layout, unsecured_value));
+            } else if always_active {
+                shell.request_redraw();
             }
         }
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         Event::Dnd(DndEvent::Source(SourceEvent::Finished | SourceEvent::Cancelled)) => {
             cold();
             let state = state();
             if matches!(state.dragging_state, Some(DraggingState::Dnd(..))) {
                 // TODO: restore value in text input
                 state.dragging_state = None;
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
         }
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         Event::Dnd(DndEvent::Offer(
             rectangle,
             OfferEvent::Enter {
@@ -1974,57 +2229,77 @@ pub fn update<'a, Message: Clone + 'static>(
                 mime_types,
                 surface,
             },
-        )) if rectangle == Some(dnd_id) => {
+        )) if *rectangle == Some(dnd_id) => {
             cold();
             let state = state();
             let is_clicked = text_layout.bounds().contains(Point {
-                x: x as f32,
-                y: y as f32,
+                x: *x as f32,
+                y: *y as f32,
             });
 
             let mut accepted = false;
-            for m in &mime_types {
+            for m in mime_types {
                 if SUPPORTED_TEXT_MIME_TYPES.contains(&m.as_str()) {
                     let clone = m.clone();
                     accepted = true;
                 }
             }
             if accepted {
-                let target = x as f32 - text_layout.bounds().x;
+                let target = {
+                    let text_bounds = text_layout.bounds();
+
+                    let alignment_offset = alignment_offset(
+                        text_bounds.width,
+                        state.value.raw().min_width(),
+                        effective_alignment(state.value.raw()),
+                    );
+
+                    *x as f32 - text_bounds.x - alignment_offset
+                };
                 state.dnd_offer =
                     DndOfferState::HandlingOffer(mime_types.clone(), DndAction::empty());
                 // existing logic for setting the selection
-                let position = if target > 0.0 {
-                    update_cache(state, value);
+                update_cache(state, value);
+                let (position, affinity) =
                     find_cursor_position(text_layout.bounds(), value, state, target)
-                } else {
-                    None
-                };
+                        .unwrap_or((0, text::Affinity::Before));
 
-                state.cursor.move_to(position.unwrap_or(0));
-                return event::Status::Captured;
+                state.cursor.set_affinity(affinity);
+                state.cursor.move_to(position);
+                shell.capture_event();
+                return;
             }
         }
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         Event::Dnd(DndEvent::Offer(rectangle, OfferEvent::Motion { x, y }))
-            if rectangle == Some(dnd_id) =>
+            if *rectangle == Some(dnd_id) =>
         {
             let state = state();
 
-            let target = x as f32 - text_layout.bounds().x;
-            // existing logic for setting the selection
-            let position = if target > 0.0 {
-                update_cache(state, value);
-                find_cursor_position(text_layout.bounds(), value, state, target)
-            } else {
-                None
-            };
+            let target = {
+                let text_bounds = text_layout.bounds();
 
-            state.cursor.move_to(position.unwrap_or(0));
-            return event::Status::Captured;
+                let alignment_offset = alignment_offset(
+                    text_bounds.width,
+                    state.value.raw().min_width(),
+                    effective_alignment(state.value.raw()),
+                );
+
+                *x as f32 - text_bounds.x - alignment_offset
+            };
+            // existing logic for setting the selection
+            update_cache(state, value);
+            let (position, affinity) =
+                find_cursor_position(text_layout.bounds(), value, state, target)
+                    .unwrap_or((0, text::Affinity::Before));
+
+            state.cursor.set_affinity(affinity);
+            state.cursor.move_to(position);
+            shell.capture_event();
+            return;
         }
-        #[cfg(feature = "wayland")]
-        Event::Dnd(DndEvent::Offer(rectangle, OfferEvent::Drop)) if rectangle == Some(dnd_id) => {
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
+        Event::Dnd(DndEvent::Offer(rectangle, OfferEvent::Drop)) if *rectangle == Some(dnd_id) => {
             cold();
             let state = state();
             if let DndOfferState::HandlingOffer(mime_types, _action) = state.dnd_offer.clone() {
@@ -2033,16 +2308,17 @@ pub fn update<'a, Message: Clone + 'static>(
                     .find(|&&m| mime_types.iter().any(|t| t == m))
                 else {
                     state.dnd_offer = DndOfferState::None;
-                    return event::Status::Captured;
+                    shell.capture_event();
+                    return;
                 };
                 state.dnd_offer = DndOfferState::Dropped;
             }
 
-            return event::Status::Ignored;
+            return;
         }
-        #[cfg(feature = "wayland")]
-        Event::Dnd(DndEvent::Offer(id, OfferEvent::LeaveDestination)) if Some(dnd_id) != id => {}
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
+        Event::Dnd(DndEvent::Offer(id, OfferEvent::LeaveDestination)) if Some(dnd_id) != *id => {}
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         Event::Dnd(DndEvent::Offer(
             rectangle,
             OfferEvent::Leave | OfferEvent::LeaveDestination,
@@ -2057,21 +2333,24 @@ pub fn update<'a, Message: Clone + 'static>(
                     state.dnd_offer = DndOfferState::None;
                 }
             };
-            return event::Status::Captured;
+            shell.capture_event();
+            return;
         }
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         Event::Dnd(DndEvent::Offer(rectangle, OfferEvent::Data { data, mime_type }))
-            if rectangle == Some(dnd_id) =>
+            if *rectangle == Some(dnd_id) =>
         {
             cold();
             let state = state();
             if matches!(&state.dnd_offer, DndOfferState::Dropped) {
                 state.dnd_offer = DndOfferState::None;
                 if !SUPPORTED_TEXT_MIME_TYPES.contains(&mime_type.as_str()) || data.is_empty() {
-                    return event::Status::Captured;
+                    shell.capture_event();
+                    return;
                 }
-                let Ok(content) = String::from_utf8(data) else {
-                    return event::Status::Captured;
+                let Ok(content) = String::from_utf8(data.clone()) else {
+                    shell.capture_event();
+                    return;
                 };
 
                 let mut editor = Editor::new(unsecured_value, &mut state.cursor);
@@ -2091,14 +2370,49 @@ pub fn update<'a, Message: Clone + 'static>(
                     unsecured_value
                 };
                 update_cache(state, &value);
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
-            return event::Status::Ignored;
+            return;
         }
         _ => {}
     }
+}
 
-    event::Status::Ignored
+fn input_method<'b>(
+    state: &'b State,
+    text_layout: Layout<'_>,
+    value: &Value,
+) -> InputMethod<&'b str> {
+    if !state.is_focused() {
+        return InputMethod::Disabled;
+    };
+
+    let text_bounds = text_layout.bounds();
+    let cursor_index = match state.cursor.state(value) {
+        cursor::State::Index(position) => position,
+        cursor::State::Selection { start, end } => start.min(end),
+    };
+    let (cursor, offset) = measure_cursor_and_scroll_offset(
+        state.value.raw(),
+        text_bounds,
+        cursor_index,
+        value,
+        state.cursor.affinity(),
+        state.scroll_offset,
+    );
+    InputMethod::Enabled {
+        cursor: Rectangle::new(
+            Point::new(text_bounds.x + cursor - offset, text_bounds.y),
+            Size::new(1.0, text_bounds.height),
+        ),
+        purpose: if state.is_secure {
+            input_method::Purpose::Secure
+        } else {
+            input_method::Purpose::Normal
+        },
+        preedit: state.preedit.as_ref().map(input_method::Preedit::as_ref),
+    }
 }
 
 /// Draws the [`TextInput`] with the given [`Renderer`], overriding its
@@ -2212,6 +2526,7 @@ pub fn draw<'a, Message>(
                     color: Color::TRANSPARENT,
                     blur_radius: 0.0,
                 },
+                snap: true,
             },
             appearance.background,
         );
@@ -2228,6 +2543,7 @@ pub fn draw<'a, Message>(
                     color: Color::TRANSPARENT,
                     blur_radius: 0.0,
                 },
+                snap: true,
             },
             Background::Color(Color::TRANSPARENT),
         );
@@ -2245,6 +2561,7 @@ pub fn draw<'a, Message>(
                     color: Color::TRANSPARENT,
                     blur_radius: 0.0,
                 },
+                snap: true,
             },
             appearance.background,
         );
@@ -2258,12 +2575,13 @@ pub fn draw<'a, Message>(
                 size: iced::Pixels(size.unwrap_or_else(|| renderer.default_size().0)),
                 font: font.unwrap_or_else(|| renderer.default_font()),
                 bounds: label_layout.bounds().size(),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Top,
+                align_x: text::Alignment::Left,
+                align_y: alignment::Vertical::Top,
                 line_height,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::None,
             },
             label_layout.bounds().position(),
             appearance.label_color,
@@ -2302,11 +2620,11 @@ pub fn draw<'a, Message>(
     let actual_width = text_width.max(text_bounds.width);
 
     let radius_0 = THEME.lock().unwrap().cosmic().corner_radii.radius_0.into();
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     let handling_dnd_offer = !matches!(state.dnd_offer, DndOfferState::None);
-    #[cfg(not(feature = "wayland"))]
+    #[cfg(not(all(feature = "wayland", target_os = "linux")))]
     let handling_dnd_offer = false;
-    let (cursor, offset) = if let Some(focus) =
+    let (cursors, offset, is_selecting) = if let Some(focus) =
         state.is_focused.filter(|f| f.focused).or_else(|| {
             let now = Instant::now();
             handling_dnd_offer.then_some(Focus {
@@ -2318,79 +2636,26 @@ pub fn draw<'a, Message>(
         }) {
         match state.cursor.state(value) {
             cursor::State::Index(position) => {
-                let (text_value_width, offset) =
-                    measure_cursor_and_scroll_offset(state.value.raw(), text_bounds, position);
-
+                let (text_value_width, _) = measure_cursor_and_scroll_offset(
+                    state.value.raw(),
+                    text_bounds,
+                    position,
+                    value,
+                    state.cursor.affinity(),
+                    state.scroll_offset,
+                );
                 let is_cursor_visible = handling_dnd_offer
                     || ((focus.now - focus.updated_at).as_millis() / CURSOR_BLINK_INTERVAL_MILLIS)
-                        % 2
-                        == 0;
-                if is_cursor_visible {
-                    if dnd_icon {
-                        (None, 0.0)
-                    } else {
-                        (
-                            Some((
-                                renderer::Quad {
-                                    bounds: Rectangle {
-                                        x: text_bounds.x + text_value_width - offset
-                                            + if text_value_width < 0. {
-                                                actual_width
-                                            } else {
-                                                0.
-                                            },
-                                        y: text_bounds.y,
-                                        width: 1.0,
-                                        height: text_bounds.height,
-                                    },
-                                    border: Border {
-                                        width: 0.0,
-                                        color: Color::TRANSPARENT,
-                                        radius: radius_0,
-                                    },
-                                    shadow: Shadow {
-                                        offset: Vector::ZERO,
-                                        color: Color::TRANSPARENT,
-                                        blur_radius: 0.0,
-                                    },
-                                },
-                                text_color,
-                            )),
-                            offset,
-                        )
-                    }
-                } else {
-                    (None, offset)
-                }
-            }
-            cursor::State::Selection { start, end } => {
-                let left = start.min(end);
-                let right = end.max(start);
+                        .is_multiple_of(2);
 
-                let value_paragraph = &state.value;
-                let (left_position, left_offset) =
-                    measure_cursor_and_scroll_offset(value_paragraph.raw(), text_bounds, left);
-
-                let (right_position, right_offset) =
-                    measure_cursor_and_scroll_offset(value_paragraph.raw(), text_bounds, right);
-
-                let width = right_position - left_position;
-                if dnd_icon {
-                    (None, 0.0)
-                } else {
+                if is_cursor_visible && !dnd_icon {
                     (
-                        Some((
+                        vec![(
                             renderer::Quad {
                                 bounds: Rectangle {
-                                    x: text_bounds.x
-                                        + left_position
-                                        + if left_position < 0. || right_position < 0. {
-                                            actual_width
-                                        } else {
-                                            0.
-                                        },
+                                    x: (text_bounds.x + text_value_width).floor(),
                                     y: text_bounds.y,
-                                    width,
+                                    width: 1.0,
                                     height: text_bounds.height,
                                 },
                                 border: Border {
@@ -2403,31 +2668,103 @@ pub fn draw<'a, Message>(
                                     color: Color::TRANSPARENT,
                                     blur_radius: 0.0,
                                 },
+                                snap: true,
                             },
-                            appearance.selected_fill,
-                        )),
-                        if end == right {
-                            right_offset
-                        } else {
-                            left_offset
-                        },
+                            text_color,
+                        )],
+                        state.scroll_offset,
+                        false,
                     )
+                } else {
+                    (
+                        Vec::<(renderer::Quad, Color)>::new(),
+                        if dnd_icon { 0.0 } else { state.scroll_offset },
+                        false,
+                    )
+                }
+            }
+            cursor::State::Selection { start, end } => {
+                let left = start.min(end);
+                let right = end.max(start);
+
+                if dnd_icon {
+                    (Vec::<(renderer::Quad, Color)>::new(), 0.0, true)
+                } else {
+                    let lo_byte = value.byte_index_at_grapheme(left);
+                    let hi_byte = value.byte_index_at_grapheme(right);
+
+                    let rects = state.value.raw().highlight(
+                        0,
+                        (lo_byte, text::Affinity::After),
+                        (hi_byte, text::Affinity::Before),
+                    );
+
+                    let cursors: Vec<(renderer::Quad, Color)> = rects
+                        .into_iter()
+                        .map(|r| {
+                            (
+                                renderer::Quad {
+                                    bounds: Rectangle {
+                                        x: text_bounds.x + r.x,
+                                        y: text_bounds.y,
+                                        width: r.width,
+                                        height: text_bounds.height,
+                                    },
+                                    border: Border {
+                                        width: 0.0,
+                                        color: Color::TRANSPARENT,
+                                        radius: radius_0,
+                                    },
+                                    shadow: Shadow {
+                                        offset: Vector::ZERO,
+                                        color: Color::TRANSPARENT,
+                                        blur_radius: 0.0,
+                                    },
+                                    snap: true,
+                                },
+                                appearance.selected_fill,
+                            )
+                        })
+                        .collect();
+
+                    (cursors, state.scroll_offset, true)
                 }
             }
         }
     } else {
-        (None, 0.0)
+        let unfocused_offset = match effective_alignment(state.value.raw()) {
+            alignment::Horizontal::Right => {
+                (state.value.raw().min_width() - text_bounds.width).max(0.0)
+            }
+            _ => 0.0,
+        };
+
+        (
+            Vec::<(renderer::Quad, Color)>::new(),
+            unfocused_offset,
+            false,
+        )
     };
 
     let render = |renderer: &mut crate::Renderer| {
-        if let Some((cursor, color)) = cursor {
-            renderer.fill_quad(cursor, color);
-        } else {
+        let alignment_offset = alignment_offset(
+            text_bounds.width,
+            state.value.raw().min_width(),
+            effective_alignment(state.value.raw()),
+        );
+
+        if cursors.is_empty() {
             renderer.with_translation(Vector::ZERO, |_| {});
+        } else {
+            renderer.with_translation(Vector::new(alignment_offset - offset, 0.0), |renderer| {
+                for (quad, color) in &cursors {
+                    renderer.fill_quad(*quad, *color);
+                }
+            });
         }
 
         let bounds = Rectangle {
-            x: text_bounds.x - offset,
+            x: text_bounds.x + alignment_offset - offset,
             y: text_bounds.center_y(),
             width: actual_width,
             ..text_bounds
@@ -2448,19 +2785,22 @@ pub fn draw<'a, Message>(
                 font,
                 bounds: bounds.size(),
                 size: iced::Pixels(size),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Center,
+                align_x: text::Alignment::Default,
+                align_y: alignment::Vertical::Center,
                 line_height: text::LineHeight::default(),
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::None,
             },
             bounds.position(),
             color,
-            *viewport,
+            text_bounds,
         );
     };
 
+    // FIXME: we always must clip with a layer because of what appears to be a tiny-skia text clipping issue.
+    // Otherwise overflowing text escapes the bounds of the input.
     renderer.with_layer(text_bounds, render);
 
     let trailing_icon_tree = children.get(child_index);
@@ -2497,12 +2837,13 @@ pub fn draw<'a, Message>(
                 size: iced::Pixels(helper_text_size),
                 font,
                 bounds: helper_text_layout.bounds().size(),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Top,
+                align_x: text::Alignment::Left,
+                align_y: alignment::Vertical::Top,
                 line_height: helper_line_height,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::None,
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::None,
             },
             helper_text_layout.bounds().position(),
             text_color,
@@ -2533,7 +2874,7 @@ pub fn mouse_interaction(
 #[derive(Debug, Clone)]
 pub struct TextInputString(pub String);
 
-#[cfg(feature = "wayland")]
+#[cfg(all(feature = "wayland", target_os = "linux"))]
 impl AsMimeTypes for TextInputString {
     fn available(&self) -> Cow<'static, [String]> {
         Cow::Owned(
@@ -2557,13 +2898,13 @@ impl AsMimeTypes for TextInputString {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum DraggingState {
     Selection,
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     PrepareDnd(Point),
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     Dnd(DndAction, String),
 }
 
-#[cfg(feature = "wayland")]
+#[cfg(all(feature = "wayland", target_os = "linux"))]
 #[derive(Debug, Default, Clone)]
 pub(crate) enum DndOfferState {
     #[default]
@@ -2572,7 +2913,7 @@ pub(crate) enum DndOfferState {
     Dropped,
 }
 #[derive(Debug, Default, Clone)]
-#[cfg(not(feature = "wayland"))]
+#[cfg(not(all(feature = "wayland", target_os = "linux")))]
 pub(crate) struct DndOfferState;
 
 /// The state of a [`TextInput`].
@@ -2589,14 +2930,16 @@ pub struct State {
     pub is_read_only: bool,
     pub emit_unfocus: bool,
     select_on_focus: bool,
+    double_click_select_delimiter: Option<char>,
     is_focused: Option<Focus>,
     dragging_state: Option<DraggingState>,
     dnd_offer: DndOfferState,
     is_pasting: Option<Value>,
     last_click: Option<mouse::Click>,
     cursor: Cursor,
+    preedit: Option<Preedit>,
     keyboard_modifiers: keyboard::Modifiers,
-    // TODO: Add stateful horizontal scrolling offset
+    scroll_offset: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -2646,7 +2989,7 @@ impl State {
         }
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     /// Returns the current value of the dragged text in the [`TextInput`].
     #[must_use]
     pub fn dragged_text(&self) -> Option<String> {
@@ -2669,12 +3012,15 @@ impl State {
             emit_unfocus: false,
             is_focused: None,
             select_on_focus: false,
+            double_click_select_delimiter: None,
             dragging_state: None,
             dnd_offer: DndOfferState::default(),
             is_pasting: None,
             last_click: None,
             cursor: Cursor::default(),
+            preedit: None,
             keyboard_modifiers: keyboard::Modifiers::default(),
+            scroll_offset: 0.0,
             dirty: false,
         }
     }
@@ -2756,14 +3102,18 @@ impl State {
         self.cursor.select_range(0, usize::MAX);
     }
 
-    pub(super) fn setting_selection(&mut self, value: &Value, bounds: Rectangle<f32>, target: f32) {
-        let position = if target > 0.0 {
-            find_cursor_position(bounds, value, self, target)
-        } else {
-            None
-        };
+    /// Selects a range of the content of the [`TextInput`].
+    #[inline]
+    pub fn select_range(&mut self, start: usize, end: usize) {
+        self.cursor.select_range(start, end);
+    }
 
-        self.cursor.move_to(position.unwrap_or(0));
+    pub(super) fn setting_selection(&mut self, value: &Value, bounds: Rectangle<f32>, target: f32) {
+        let (position, affinity) = find_cursor_position(bounds, value, self, target)
+            .unwrap_or((0, text::Affinity::Before));
+
+        self.cursor.set_affinity(affinity);
+        self.cursor.move_to(position);
         self.dragging_state = Some(DraggingState::Selection);
     }
 }
@@ -2811,6 +3161,15 @@ impl operation::TextInput for State {
     fn select_all(&mut self) {
         Self::select_all(self);
     }
+
+    fn text(&self) -> &str {
+        todo!()
+    }
+
+    #[inline]
+    fn select_range(&mut self, start: usize, end: usize) {
+        Self::select_range(self, start, end);
+    }
 }
 
 #[inline(never)]
@@ -2818,14 +3177,33 @@ fn measure_cursor_and_scroll_offset(
     paragraph: &impl text::Paragraph,
     text_bounds: Rectangle,
     cursor_index: usize,
+    value: &Value,
+    affinity: text::Affinity,
+    current_offset: f32,
 ) -> (f32, f32) {
-    let grapheme_position = paragraph
-        .grapheme_position(0, cursor_index)
+    let byte_index = value.byte_index_at_grapheme(cursor_index);
+    let position = paragraph
+        .cursor_position(0, byte_index, affinity)
         .unwrap_or(Point::ORIGIN);
 
-    let offset = ((grapheme_position.x + 5.0) - text_bounds.width).max(0.0);
+    // The visible window in paragraph coordinates is:
+    //   [current_offset, current_offset + text_bounds.width]
+    // Keep the cursor visible with a 5px margin on each side.
+    let offset = if position.x > current_offset + text_bounds.width - 5.0 {
+        // Cursor past right edge of visible window → scroll left
+        (position.x + 5.0) - text_bounds.width
+    } else if position.x < current_offset + 5.0 {
+        // Cursor past left edge of visible window → scroll right
+        position.x - 5.0
+    } else {
+        // Cursor is within visible window → keep current scroll
+        current_offset
+    };
 
-    (grapheme_position.x, offset)
+    let max_offset = (paragraph.min_width() - text_bounds.width).max(0.0);
+    let offset = offset.clamp(0.0, max_offset);
+
+    (position.x, offset)
 }
 
 /// Computes the position of the text cursor at the given X coordinate of
@@ -2836,23 +3214,23 @@ fn find_cursor_position(
     value: &Value,
     state: &State,
     x: f32,
-) -> Option<usize> {
-    let offset = offset(text_bounds, value, state);
-    let value = value.to_string();
+) -> Option<(usize, text::Affinity)> {
+    let value_str = value.to_string();
 
-    let char_offset = state
-        .value
-        .raw()
-        .hit_test(Point::new(x + offset, text_bounds.height / 2.0))
-        .map(text::Hit::cursor)?;
+    let hit = state.value.raw().hit_test(Point::new(
+        x + state.scroll_offset,
+        text_bounds.height / 2.0,
+    ))?;
+    let char_offset = hit.cursor();
+    let affinity = hit.affinity();
 
-    Some(
-        unicode_segmentation::UnicodeSegmentation::graphemes(
-            &value[..char_offset.min(value.len())],
-            true,
-        )
-        .count(),
+    let grapheme_count = unicode_segmentation::UnicodeSegmentation::graphemes(
+        &value_str[..char_offset.min(value_str.len())],
+        true,
     )
+    .count();
+
+    Some((grapheme_count, affinity))
 }
 
 #[inline(never)]
@@ -2876,14 +3254,15 @@ fn replace_paragraph(
     state.value = crate::Plain::new(Text {
         font,
         line_height,
-        content: &value.to_string(),
+        content: value.to_string(),
         bounds,
         size: text_size,
-        horizontal_alignment: alignment::Horizontal::Left,
-        vertical_alignment: alignment::Vertical::Top,
+        align_x: text::Alignment::Default,
+        align_y: alignment::Vertical::Top,
         shaping: text::Shaping::Advanced,
         wrapping: text::Wrapping::None,
         letter_spacing: None,
+        ellipsize: text::Ellipsize::None,
     });
 }
 
@@ -2912,11 +3291,48 @@ fn offset(text_bounds: Rectangle, value: &Value, state: &State) -> f32 {
             cursor::State::Selection { end, .. } => end,
         };
 
-        let (_, offset) =
-            measure_cursor_and_scroll_offset(state.value.raw(), text_bounds, focus_position);
+        let (_, offset) = measure_cursor_and_scroll_offset(
+            state.value.raw(),
+            text_bounds,
+            focus_position,
+            value,
+            state.cursor().affinity(),
+            state.scroll_offset,
+        );
 
         offset
     } else {
+        match effective_alignment(state.value.raw()) {
+            alignment::Horizontal::Right => {
+                (state.value.raw().min_width() - text_bounds.width).max(0.0)
+            }
+            _ => 0.0,
+        }
+    }
+}
+
+#[inline(never)]
+fn alignment_offset(
+    text_bounds_width: f32,
+    text_min_width: f32,
+    alignment: alignment::Horizontal,
+) -> f32 {
+    if text_min_width > text_bounds_width {
         0.0
+    } else {
+        match alignment {
+            alignment::Horizontal::Left => 0.0,
+            alignment::Horizontal::Center => (text_bounds_width - text_min_width) / 2.0,
+            alignment::Horizontal::Right => text_bounds_width - text_min_width,
+        }
+    }
+}
+
+#[inline(never)]
+fn effective_alignment(paragraph: &impl text::Paragraph) -> alignment::Horizontal {
+    if paragraph.is_rtl(0).unwrap_or(false) {
+        alignment::Horizontal::Right
+    } else {
+        alignment::Horizontal::Left
     }
 }

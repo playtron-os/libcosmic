@@ -1,11 +1,9 @@
 // From iced_aw, license MIT
 
-use iced_core::{Widget, widget::Tree};
-use iced_widget::core::{
-    Alignment, Element, Padding, Point, Size,
-    layout::{Limits, Node},
-    renderer,
-};
+use iced_core::Widget;
+use iced_core::widget::Tree;
+use iced_widget::core::layout::{Limits, Node};
+use iced_widget::core::{Alignment, Element, Padding, Point, Size, renderer};
 
 use crate::widget::RcElementWrapper;
 
@@ -57,11 +55,11 @@ pub fn resolve<'a, E, Message, Renderer>(
     padding: Padding,
     spacing: f32,
     align_items: Alignment,
-    items: &[E],
+    items: &mut [E],
     tree: &mut [&mut Tree],
 ) -> Node
 where
-    E: std::borrow::Borrow<Element<'a, Message, crate::Theme, Renderer>>,
+    E: std::borrow::BorrowMut<Element<'a, Message, crate::Theme, Renderer>>,
     Renderer: renderer::Renderer,
 {
     let limits = limits.shrink(padding);
@@ -69,7 +67,7 @@ where
     let max_cross = axis.cross(limits.max());
 
     let mut fill_sum = 0;
-    let mut cross = axis.cross(limits.min()).max(axis.cross(Size::INFINITY));
+    let mut cross = axis.cross(limits.min()).max(axis.cross(Size::INFINITE));
     let mut available = axis.main(limits.max()) - total_spacing;
 
     let mut nodes: Vec<Node> = Vec::with_capacity(items.len());
@@ -78,8 +76,8 @@ where
     if align_items == Alignment::Center {
         let mut fill_cross = axis.cross(limits.min());
 
-        for (child, tree) in items.iter().zip(tree.iter_mut()) {
-            let child = child.borrow();
+        for (child, tree) in items.iter_mut().zip(tree.iter_mut()) {
+            let child = child.borrow_mut();
             let c_size = child.as_widget().size();
             let cross_fill_factor = match axis {
                 Axis::Horizontal => c_size.height,
@@ -92,7 +90,7 @@ where
 
                 let child_limits = Limits::new(Size::ZERO, Size::new(max_width, max_height));
 
-                let layout = child.as_widget().layout(tree, renderer, &child_limits);
+                let layout = child.as_widget_mut().layout(tree, renderer, &child_limits);
                 let size = layout.size();
 
                 fill_cross = fill_cross.max(axis.cross(size));
@@ -102,8 +100,8 @@ where
         cross = fill_cross;
     }
 
-    for (i, (child, tree)) in items.iter().zip(tree.iter_mut()).enumerate() {
-        let child = child.borrow();
+    for (i, (child, tree)) in items.iter_mut().zip(tree.iter_mut()).enumerate() {
+        let child = child.borrow_mut();
         let c_size = child.as_widget().size();
         let fill_factor = match axis {
             Axis::Horizontal => c_size.width,
@@ -129,7 +127,7 @@ where
                 Size::new(max_width, max_height),
             );
 
-            let layout = child.as_widget().layout(tree, renderer, &child_limits);
+            let layout = child.as_widget_mut().layout(tree, renderer, &child_limits);
             let size = layout.size();
 
             available -= axis.main(size);
@@ -146,8 +144,8 @@ where
 
     let remaining = available.max(0.0);
 
-    for (i, (child, tree)) in items.iter().zip(tree.iter_mut()).enumerate() {
-        let child = child.borrow();
+    for (i, (child, tree)) in items.iter_mut().zip(tree.iter_mut()).enumerate() {
+        let child = child.borrow_mut();
         let c_size = child.as_widget().size();
         let fill_factor = match axis {
             Axis::Horizontal => c_size.width,
@@ -180,7 +178,7 @@ where
                 Size::new(max_width, max_height),
             );
 
-            let layout = child.as_widget().layout(tree, renderer, &child_limits);
+            let layout = child.as_widget_mut().layout(tree, renderer, &child_limits);
 
             if align_items != Alignment::Center {
                 cross = cross.max(axis.cross(layout.size()));
@@ -231,7 +229,7 @@ pub fn resolve_wrapper<'a, Message>(
     padding: Padding,
     spacing: f32,
     align_items: Alignment,
-    items: &[&RcElementWrapper<Message>],
+    items: &mut [&mut RcElementWrapper<Message>],
     tree: &mut [&mut Tree],
 ) -> Node {
     let limits = limits.shrink(padding);
@@ -239,7 +237,7 @@ pub fn resolve_wrapper<'a, Message>(
     let max_cross = axis.cross(limits.max());
 
     let mut fill_sum = 0;
-    let mut cross = axis.cross(limits.min()).max(axis.cross(Size::INFINITY));
+    let mut cross = axis.cross(limits.min()).max(axis.cross(Size::INFINITE));
     let mut available = axis.main(limits.max()) - total_spacing;
 
     let mut nodes: Vec<Node> = Vec::with_capacity(items.len());
@@ -248,7 +246,7 @@ pub fn resolve_wrapper<'a, Message>(
     if align_items == Alignment::Center {
         let mut fill_cross = axis.cross(limits.min());
 
-        for (child, tree) in items.iter().zip(tree.iter_mut()) {
+        for (child, tree) in items.into_iter().zip(tree.iter_mut()) {
             let c_size = child.size();
             let cross_fill_factor = match axis {
                 Axis::Horizontal => c_size.height,
@@ -271,7 +269,7 @@ pub fn resolve_wrapper<'a, Message>(
         cross = fill_cross;
     }
 
-    for (i, (child, tree)) in items.iter().zip(tree.iter_mut()).enumerate() {
+    for (i, (child, tree)) in items.into_iter().zip(tree.iter_mut()).enumerate() {
         let c_size = child.size();
         let fill_factor = match axis {
             Axis::Horizontal => c_size.width,
@@ -314,7 +312,7 @@ pub fn resolve_wrapper<'a, Message>(
 
     let remaining = available.max(0.0);
 
-    for (i, (child, tree)) in items.iter().zip(tree.iter_mut()).enumerate() {
+    for (i, (child, tree)) in items.into_iter().zip(tree.iter_mut()).enumerate() {
         let c_size = child.size();
         let fill_factor = match axis {
             Axis::Horizontal => c_size.width,

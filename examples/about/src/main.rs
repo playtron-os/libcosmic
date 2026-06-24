@@ -8,7 +8,8 @@ use cosmic::app::{Core, Settings, Task};
 use cosmic::executor;
 use cosmic::iced::{alignment, Length, Size};
 use cosmic::prelude::*;
-use cosmic::widget::{self, about::About, nav_bar};
+use cosmic::widget::about::About;
+use cosmic::widget::{self, nav_bar};
 
 /// Runs application with these settings
 #[rustfmt::skip]
@@ -132,7 +133,7 @@ impl cosmic::Application for App {
     fn view(&self) -> Element<'_, Self::Message> {
         let show_about_button = widget::button::text("Show about").on_press(Message::ToggleAbout);
         let centered = cosmic::widget::container(
-            widget::column()
+            widget::column::with_capacity(1)
                 .push(show_about_button)
                 .width(Length::Fill)
                 .height(Length::Shrink)

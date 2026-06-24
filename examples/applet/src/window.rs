@@ -1,10 +1,11 @@
 use cosmic::app::{Core, Task};
 
+use cosmic::iced::core::window;
 use cosmic::iced::window::Id;
 use cosmic::iced::{Length, Rectangle};
-use cosmic::iced_runtime::core::window;
 use cosmic::surface::action::{app_popup, destroy_popup};
-use cosmic::widget::{dropdown::popup_dropdown, list_column, settings, toggler};
+use cosmic::widget::dropdown::popup_dropdown;
+use cosmic::widget::{list_column, settings, toggler};
 use cosmic::Element;
 
 const ID: &str = "com.system76.CosmicAppletExample";
@@ -13,6 +14,7 @@ pub struct Window {
     core: Core,
     popup: Option<Id>,
     example_row: bool,
+    toggle: bool,
     selected: Option<usize>,
 }
 
@@ -22,6 +24,7 @@ impl Default for Window {
             core: Core::default(),
             popup: None,
             example_row: false,
+            toggle: false,
             selected: None,
         }
     }
@@ -33,6 +36,7 @@ pub enum Message {
     ToggleExampleRow(bool),
     Selected(usize),
     Surface(cosmic::surface::Action),
+    Toggle(bool),
 }
 
 impl cosmic::Application for Window {
@@ -71,7 +75,6 @@ impl cosmic::Application for Window {
             Message::ToggleExampleRow(toggled) => {
                 self.example_row = toggled;
             }
-
             Message::Surface(a) => {
                 return cosmic::task::message(cosmic::Action::Cosmic(
                     cosmic::app::Action::Surface(a),
@@ -79,6 +82,9 @@ impl cosmic::Application for Window {
             }
             Message::Selected(i) => {
                 self.selected = Some(i);
+            }
+            Message::Toggle(v) => {
+                self.toggle = v;
             }
         };
         Task::none()
@@ -117,15 +123,12 @@ impl cosmic::Application for Window {
                         },
                         Some(Box::new(move |state: &Window| {
                             let content_list = list_column()
-                                .padding(5)
-                                .spacing(0)
                                 .add(settings::item(
                                     "Example row",
                                     cosmic::widget::container(
                                         toggler(state.example_row)
-                                            .on_toggle(|value| Message::ToggleExampleRow(value)),
-                                    )
-                                    .height(Length::Fixed(50.)),
+                                            .on_toggle(Message::ToggleExampleRow),
+                                    ),
                                 ))
                                 .add(popup_dropdown(
                                     &["1", "asdf", "hello", "test"],
@@ -155,7 +158,7 @@ impl cosmic::Application for Window {
         "oops".into()
     }
 
-    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
+    fn style(&self) -> Option<cosmic::iced::theme::Style> {
         Some(cosmic::applet::style())
     }
 }

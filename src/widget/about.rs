@@ -1,8 +1,7 @@
-use crate::{
-    Apply, Element, fl,
-    iced::{Alignment, Length},
-    widget::{self, horizontal_space},
-};
+use crate::iced::{Alignment, Length};
+use crate::widget::{self, list};
+use crate::{Apply, Element, fl};
+use std::rc::Rc;
 
 #[derive(Debug, Default, Clone, derive_setters::Setters)]
 #[setters(into, strip_option)]
@@ -47,32 +46,40 @@ pub struct About {
 fn add_contributors(contributors: Vec<(&str, &str)>) -> Vec<(String, String)> {
     contributors
         .into_iter()
-        .map(|(name, email)| (name.to_string(), format!("mailto:{email}")))
+        .map(|(name, email)| (name.into(), format!("mailto:{email}")))
         .collect()
 }
 
-macro_rules! set_contributors {
-    ($field:ident, $doc:expr) => {
-        #[doc = $doc]
-        pub fn $field(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
-            self.$field = add_contributors(contributors.into());
-            self
-        }
-    };
-}
-
 impl<'a> About {
-    set_contributors!(artists, "Artists who contributed to the application.");
-    set_contributors!(designers, "Designers who contributed to the application.");
-    set_contributors!(developers, "Developers who contributed to the application.");
-    set_contributors!(
-        documenters,
-        "Documenters who contributed to the application."
-    );
-    set_contributors!(
-        translators,
-        "Translators who contributed to the application."
-    );
+    /// Artists who contributed to the application.
+    pub fn artists(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
+        self.artists = add_contributors(contributors.into());
+        self
+    }
+
+    /// Designers who contributed to the application.
+    pub fn designers(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
+        self.designers = add_contributors(contributors.into());
+        self
+    }
+
+    /// Developers who contributed to the application.
+    pub fn developers(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
+        self.developers = add_contributors(contributors.into());
+        self
+    }
+
+    /// Documenters who contributed to the application.
+    pub fn documenters(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
+        self.documenters = add_contributors(contributors.into());
+        self
+    }
+
+    /// Translators who contributed to the application.
+    pub fn translators(mut self, contributors: impl Into<Vec<(&'a str, &'a str)>>) -> Self {
+        self.translators = add_contributors(contributors.into());
+        self
+    }
 
     /// Links associated with the application.
     pub fn links<K: Into<String>, V: Into<String>>(
@@ -96,19 +103,23 @@ pub fn about<'a, Message: Clone + 'static>(
         space_xxs, space_m, ..
     } = crate::theme::spacing();
 
-    let section_button = |name: &'a str, url: &'a str| -> Element<'a, Message> {
-        widget::row()
-            .push(widget::text(name))
-            .push(horizontal_space())
+    let svg_accent = Rc::new(|theme: &crate::Theme| widget::svg::Style {
+        color: Some(theme.cosmic().accent_text_color().into()),
+    });
+
+    let section_button = |name: &'a str, url: &'a str| -> list::ListButton<'a, Message> {
+        widget::row::with_capacity(2)
+            .push(widget::text::body(name).width(Length::Fill))
             .push_maybe(
-                (!url.is_empty()).then_some(crate::widget::icon::from_name("link-symbolic").icon()),
+                (!url.is_empty()).then_some(
+                    widget::icon::from_name("link-symbolic")
+                        .icon()
+                        .class(crate::theme::Svg::Custom(svg_accent.clone())),
+                ),
             )
             .align_y(Alignment::Center)
-            .apply(widget::button::custom)
-            .class(crate::theme::Button::Link)
+            .apply(list::button)
             .on_press(on_url_press(url))
-            .width(Length::Fill)
-            .into()
     };
 
     let section = |list: &'a Vec<(String, String)>, title: String| {
@@ -158,7 +169,7 @@ pub fn about<'a, Message: Clone + 'static>(
     let copyright = about.copyright.as_ref().map(widget::text::body);
     let comments = about.comments.as_ref().map(widget::text::body);
 
-    widget::column()
+    widget::column::with_capacity(10)
         .push_maybe(header)
         .push_maybe(links_section)
         .push_maybe(developers_section)

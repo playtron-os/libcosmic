@@ -1,9 +1,7 @@
 use super::{Page, Window};
-use cosmic::{
-    iced::widget::{column, text},
-    widget::{list_column, settings, toggler},
-    Element,
-};
+use cosmic::iced::widget::{column, text};
+use cosmic::widget::{list_column, settings, toggler};
+use cosmic::Element;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Message {
@@ -28,13 +26,14 @@ impl State {
             column!(
                 list_column().add(settings::item(
                     "Bluetooth",
-                    toggler(None, self.enabled, Message::Enable)
+                    toggler(self.enabled).on_toggle(Message::Enable)
                 )),
                 text("Now visible as \"TODO\", just kidding")
             )
             .spacing(8)
             .into(),
-            settings::view_section("Devices")
+            settings::section()
+                .title("Devices")
                 .add(settings::item("No devices found", text("")))
                 .into(),
         ])

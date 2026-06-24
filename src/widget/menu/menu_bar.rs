@@ -1,41 +1,37 @@
 // From iced_aw, license MIT
 
 //! A widget that handles menu trees
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
-use super::{
-    menu_inner::{
-        CloseCondition, Direction, ItemHeight, ItemWidth, Menu, MenuState, PathHighlight,
-    },
-    menu_tree::MenuTree,
+use super::menu_inner::{
+    CloseCondition, Direction, ItemHeight, ItemWidth, Menu, MenuState, PathHighlight,
 };
+use super::menu_tree::MenuTree;
+use crate::Renderer;
 #[cfg(all(
     feature = "multi-window",
     feature = "wayland",
+    target_os = "linux",
     feature = "winit",
     feature = "surface-message"
 ))]
 use crate::app::cosmic::{WINDOWING_SYSTEM, WindowingSystem};
-use crate::{
-    Renderer,
-    style::menu_bar::StyleSheet,
-    widget::{
-        RcWrapper,
-        dropdown::menu::{self, State},
-        menu::menu_inner::init_root_menu,
-    },
-};
+use crate::style::menu_bar::StyleSheet;
+use crate::widget::RcWrapper;
+use crate::widget::dropdown::menu::{self, State};
+use crate::widget::menu::menu_inner::init_root_menu;
 
+use iced::event::Status;
 use iced::{Point, Shadow, Vector, window};
 use iced_core::Border;
+use iced_widget::core::layout::{Limits, Node};
+use iced_widget::core::mouse::{self, Cursor};
+use iced_widget::core::renderer::{self, Renderer as IcedRenderer};
+use iced_widget::core::widget::{Tree, tree};
 use iced_widget::core::{
     Alignment, Clipboard, Element, Layout, Length, Padding, Rectangle, Shell, Widget, event,
-    layout::{Limits, Node},
-    mouse::{self, Cursor},
-    overlay,
-    renderer::{self, Renderer as IcedRenderer},
-    touch,
-    widget::{Tree, tree},
+    overlay, touch,
 };
 
 /// A `MenuBar` collects `MenuTree`s and handles all the layout, event processing, and drawing.
@@ -195,7 +191,12 @@ pub struct MenuBar<Message> {
     menu_roots: Vec<MenuTree<Message>>,
     style: <crate::Theme as StyleSheet>::Style,
     window_id: window::Id,
-    #[cfg(all(feature = "multi-window", feature = "wayland", feature = "winit"))]
+    #[cfg(all(
+        feature = "multi-window",
+        feature = "wayland",
+        feature = "winit",
+        target_os = "linux"
+    ))]
     positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner,
     pub(crate) on_surface_action:
         Option<Arc<dyn Fn(crate::surface::Action) -> Message + Send + Sync + 'static>>,
@@ -230,7 +231,12 @@ where
             menu_roots,
             style: <crate::Theme as StyleSheet>::Style::default(),
             window_id: window::Id::NONE,
-            #[cfg(all(feature = "multi-window", feature = "wayland", feature = "winit"))]
+            #[cfg(all(
+                feature = "multi-window",
+                feature = "wayland",
+                feature = "winit",
+                target_os = "linux"
+            ))]
             positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner::default(),
             on_surface_action: None,
         }
@@ -324,7 +330,12 @@ where
         self
     }
 
-    #[cfg(all(feature = "multi-window", feature = "wayland", feature = "winit"))]
+    #[cfg(all(
+        feature = "multi-window",
+        feature = "wayland",
+        feature = "winit",
+        target_os = "linux"
+    ))]
     pub fn with_positioner(
         mut self,
         positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner,
@@ -359,6 +370,7 @@ where
     #[cfg(all(
         feature = "multi-window",
         feature = "wayland",
+        target_os = "linux",
         feature = "winit",
         feature = "surface-message"
     ))]
@@ -533,14 +545,14 @@ where
         menu_roots_children(&self.menu_roots)
     }
 
-    fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         use super::flex;
 
         let limits = limits.width(self.width).height(self.height);
-        let children = self
+        let mut children = self
             .menu_roots
-            .iter()
-            .map(|root| &root.item)
+            .iter_mut()
+            .map(|root| &mut root.item)
             .collect::<Vec<_>>();
         // the first children of the tree are the menu roots items
         let mut tree_children = tree
@@ -555,32 +567,33 @@ where
             self.padding,
             self.spacing,
             Alignment::Center,
-            &children,
+            &mut children,
             &mut tree_children,
         )
     }
 
     #[allow(clippy::too_many_lines)]
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: event::Event,
+        event: &event::Event,
         layout: Layout<'_>,
         view_cursor: Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         use event::Event::{Mouse, Touch};
-        use mouse::{Button::Left, Event::ButtonReleased};
+        use mouse::Button::Left;
+        use mouse::Event::ButtonReleased;
         use touch::Event::{FingerLifted, FingerLost};
 
-        let root_status = process_root_events(
+        process_root_events(
             &mut self.menu_roots,
             view_cursor,
             tree,
-            &event,
+            event,
             layout,
             renderer,
             clipboard,
@@ -609,6 +622,13 @@ where
         });
 
         match event {
+            Mouse(mouse::Event::ButtonPressed(Left))
+            | Touch(touch::Event::FingerPressed { .. })
+                if view_cursor.is_over(layout.bounds()) =>
+            {
+                // TODO should we track that it has been pressed?
+                shell.capture_event();
+            }
             Mouse(ButtonReleased(Left)) | Touch(FingerLifted { .. } | FingerLost { .. }) => {
                 let create_popup = my_state.inner.with_data_mut(|state| {
                     let mut create_popup = false;
@@ -622,11 +642,13 @@ where
                         state.open = false;
                         #[cfg(all(
                             feature = "wayland",
+                            target_os = "linux",
                             feature = "winit",
                             feature = "surface-message"
                         ))]
                         {
                             let surface_action = self.on_surface_action.as_ref().unwrap();
+                            shell.capture_event();
 
                             shell.publish(surface_action(crate::surface::action::destroy_popup(
                                 _id,
@@ -638,11 +660,13 @@ where
                 });
 
                 if !create_popup {
-                    return event::Status::Ignored;
+                    return;
                 }
+                shell.capture_event();
                 #[cfg(all(
                     feature = "multi-window",
                     feature = "wayland",
+                    target_os = "linux",
                     feature = "winit",
                     feature = "surface-message"
                 ))]
@@ -653,9 +677,11 @@ where
             Mouse(mouse::Event::CursorMoved { .. } | mouse::Event::CursorEntered)
                 if open && view_cursor.is_over(layout.bounds()) =>
             {
+                shell.capture_event();
                 #[cfg(all(
                     feature = "multi-window",
                     feature = "wayland",
+                    target_os = "linux",
                     feature = "winit",
                     feature = "surface-message"
                 ))]
@@ -665,8 +691,6 @@ where
             }
             _ => (),
         }
-
-        root_status
     }
 
     fn mouse_interaction(
@@ -723,6 +747,7 @@ where
                             ..Default::default()
                         },
                         shadow: Shadow::default(),
+                        snap: true,
                     };
 
                     renderer.fill_quad(path_quad, styling.path);
@@ -750,13 +775,15 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         _renderer: &Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, Renderer>> {
         #[cfg(all(
             feature = "multi-window",
             feature = "wayland",
+            target_os = "linux",
             feature = "winit",
             feature = "surface-message"
         ))]
@@ -818,25 +845,22 @@ fn process_root_events<Message>(
     clipboard: &mut dyn Clipboard,
     shell: &mut Shell<'_, Message>,
     viewport: &Rectangle,
-) -> event::Status
-where
-{
-    menu_roots
+) {
+    for ((root, t), lo) in menu_roots
         .iter_mut()
         .zip(&mut tree.children)
         .zip(layout.children())
-        .map(|((root, t), lo)| {
-            // assert!(t.tag == tree::Tag::stateless());
-            root.item.on_event(
-                &mut t.children[root.index],
-                event.clone(),
-                lo,
-                view_cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            )
-        })
-        .fold(event::Status::Ignored, event::Status::merge)
+    {
+        // assert!(t.tag == tree::Tag::stateless());
+        root.item.update(
+            &mut t.children[root.index],
+            event,
+            lo,
+            view_cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
+    }
 }

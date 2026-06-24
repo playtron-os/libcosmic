@@ -1,29 +1,27 @@
 use crate::iced;
-use crate::iced_futures::futures;
 use cctk::sctk::reexports::calloop;
-use futures::{
-    SinkExt, StreamExt,
-    channel::mpsc::{UnboundedReceiver, unbounded},
-};
+use futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use futures::{SinkExt, StreamExt};
 use iced::Subscription;
-use iced_futures::stream;
-use std::{fmt::Debug, hash::Hash, thread::JoinHandle};
+use iced_futures::{futures, stream};
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::thread::JoinHandle;
 
 use super::wayland_handler::wayland_handler;
 
 pub fn activation_token_subscription<I: 'static + Hash + Copy + Send + Sync + Debug>(
     id: I,
 ) -> iced::Subscription<TokenUpdate> {
-    Subscription::run_with_id(
-        id,
+    Subscription::run_with(id, |_| {
         stream::channel(50, move |mut output| async move {
             let mut state = State::Ready;
 
             loop {
                 state = start_listening(state, &mut output).await;
             }
-        }),
-    )
+        })
+    })
 }
 
 pub enum State {

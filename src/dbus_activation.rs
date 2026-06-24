@@ -1,90 +1,93 @@
 // Copyright 2024 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use {
-    crate::ApplicationExt,
-    iced::Subscription,
-    iced_futures::futures::{
-        SinkExt,
-        channel::mpsc::{Receiver, Sender},
-    },
-    std::{any::TypeId, collections::HashMap},
-    url::Url,
-    zbus::{interface, proxy, zvariant::Value},
-};
+use crate::ApplicationExt;
+use iced::Subscription;
+use iced_futures::futures::SinkExt;
+use iced_futures::futures::channel::mpsc::{Receiver, Sender};
+use std::any::TypeId;
+use std::collections::HashMap;
+use url::Url;
+use zbus::zvariant::Value;
+use zbus::{interface, proxy};
 
 #[cold]
 pub fn subscription<App: ApplicationExt>() -> Subscription<crate::Action<App::Message>> {
     use iced_futures::futures::StreamExt;
-    iced_futures::Subscription::run_with_id(
-        TypeId::of::<DbusActivation>(),
-        iced::stream::channel(10, move |mut output| async move {
-            let mut single_instance: DbusActivation = DbusActivation::new();
-            let mut rx = single_instance.rx();
-            if let Ok(builder) = zbus::connection::Builder::session() {
-                let path: String = format!("/{}", App::APP_ID.replace('.', "/"));
-                if let Ok(conn) = builder.build().await {
-                    // XXX Setup done this way seems to be more reliable.
-                    //
-                    // the docs for serve_at seem to imply it will replace the
-                    // existing interface at the requested path, but it doesn't
-                    // seem to work that way all the time. The docs for
-                    // object_server().at() imply it won't replace the existing
-                    // interface.
-                    //
-                    // request_name is used either way, with the builder or
-                    // with the connection, but it must be done after the
-                    // object server is setup.
-                    if conn.object_server().at(path, single_instance).await != Ok(true) {
-                        tracing::error!("Failed to serve dbus");
-                        std::process::exit(1);
-                    }
-                    if conn.request_name(App::APP_ID).await.is_err() {
-                        tracing::error!("Failed to serve dbus");
-                        std::process::exit(1);
-                    }
+    iced_futures::Subscription::run_with(TypeId::of::<DbusActivation>(), |_| {
+        iced::stream::channel(
+            10,
+            move |mut output: Sender<crate::Action<App::Message>>| async move {
+                let mut single_instance: DbusActivation = DbusActivation::new();
+                let mut rx = single_instance.rx();
+                if let Ok(builder) = zbus::connection::Builder::session() {
+                    let path: String = format!("/{}", App::APP_ID.replace('.', "/"));
+                    if let Ok(conn) = builder.build().await {
+                        // XXX Setup done this way seems to be more reliable.
+                        //
+                        // the docs for serve_at seem to imply it will replace the
+                        // existing interface at the requested path, but it doesn't
+                        // seem to work that way all the time. The docs for
+                        // object_server().at() imply it won't replace the existing
+                        // interface.
+                        //
+                        // request_name is used either way, with the builder or
+                        // with the connection, but it must be done after the
+                        // object server is setup.
+                        if conn.object_server().at(path, single_instance).await != Ok(true) {
+                            tracing::error!("Failed to serve dbus");
+                            std::process::exit(1);
+                        }
+                        if conn.request_name(App::APP_ID).await.is_err() {
+                            tracing::error!("Failed to serve dbus");
+                            std::process::exit(1);
+                        }
 
-                    output
-                        .send(crate::Action::Cosmic(crate::app::Action::DbusConnection(
-                            conn.clone(),
-                        )))
-                        .await;
+                        output
+                            .send(crate::Action::Cosmic(crate::app::Action::DbusConnection(
+                                conn.clone(),
+                            )))
+                            .await;
 
-                    #[cfg(feature = "smol")]
-                    let handle = {
-                        std::thread::spawn(move || {
-                            let conn_clone = _conn.clone();
+                        #[cfg(feature = "smol")]
+                        let handle = {
+                            std::thread::spawn(move || {
+                                let conn_clone = _conn.clone();
 
-                            zbus::block_on(async move {
-                                loop {
-                                    conn_clone.executor().tick().await;
-                                }
+                                zbus::block_on(async move {
+                                    loop {
+                                        conn_clone.executor().tick().await;
+                                    }
+                                })
                             })
-                        })
-                    };
-                    while let Some(mut msg) = rx.next().await {
-                        if let Some(token) = msg.activation_token.take() {
-                            if let Err(err) = output
-                                .send(crate::Action::Cosmic(crate::app::Action::Activate(token)))
-                                .await
+                        };
+                        while let Some(mut msg) = rx.next().await {
+                            if let Some(token) = msg.activation_token.take() {
+                                if let Err(err) = output
+                                    .send(crate::Action::Cosmic(crate::app::Action::Activate(
+                                        token,
+                                    )))
+                                    .await
+                                {
+                                    tracing::error!(?err, "Failed to send message");
+                                }
+                            }
+                            if let Err(err) = output.send(crate::Action::DbusActivation(msg)).await
                             {
                                 tracing::error!(?err, "Failed to send message");
                             }
                         }
-                        if let Err(err) = output.send(crate::Action::DbusActivation(msg)).await {
-                            tracing::error!(?err, "Failed to send message");
-                        }
                     }
+                } else {
+                    tracing::warn!("Failed to connect to dbus for single instance");
                 }
-            } else {
-                tracing::warn!("Failed to connect to dbus for single instance");
-            }
 
-            loop {
-                iced::futures::pending!();
-            }
-        }),
-    )
+                loop {
+                    iced::futures::pending!();
+                }
+            },
+        )
+    })
 }
 
 #[derive(Debug, Clone)]

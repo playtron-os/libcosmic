@@ -12,9 +12,9 @@ use iced_core::event::{self, Event};
 use iced_core::text::{self, Paragraph, Text};
 use iced_core::widget::tree::{self, Tree};
 use iced_core::{
-    Clipboard, Layout, Length, Padding, Pixels, Rectangle, Shell, Size, Vector, Widget,
+    Clipboard, Layout, Length, Padding, Pixels, Rectangle, Shadow, Shell, Size, Vector, Widget,
+    alignment, keyboard, layout, mouse, overlay, renderer, svg, touch,
 };
-use iced_core::{Shadow, alignment, keyboard, layout, mouse, overlay, renderer, svg, touch};
 use iced_widget::pick_list::{self, Catalog};
 use std::borrow::Cow;
 use std::ffi::OsStr;
@@ -60,7 +60,7 @@ where
     action_map: Option<Arc<dyn Fn(Message) -> AppMessage + 'static + Send + Sync>>,
     #[setters(strip_option)]
     window_id: Option<window::Id>,
-    #[cfg(all(feature = "winit", feature = "wayland"))]
+    #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
     positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner,
 }
 
@@ -96,14 +96,14 @@ where
             text_line_height: text::LineHeight::Relative(1.2),
             font: None,
             window_id: None,
-            #[cfg(all(feature = "winit", feature = "wayland"))]
+            #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
             positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner::default(),
             on_surface_action: None,
             action_map: None,
         }
     }
 
-    #[cfg(all(feature = "winit", feature = "wayland"))]
+    #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
     /// Handle dropdown requests for popup creation.
     /// Intended to be used with [`crate::app::message::get_popup`]
     pub fn with_popup<NewAppMessage>(
@@ -154,7 +154,7 @@ where
         self
     }
 
-    #[cfg(all(feature = "winit", feature = "wayland"))]
+    #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
     pub fn with_positioner(
         mut self,
         positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner,
@@ -203,16 +203,17 @@ where
             state.hashes[i] = text_hash;
             state.selections[i].update(Text {
                 content: selection.as_ref(),
-                bounds: Size::INFINITY,
+                bounds: Size::INFINITE,
                 // TODO use the renderer default size
                 size: iced::Pixels(self.text_size.unwrap_or(14.0)),
                 line_height: self.text_line_height,
                 font: self.font.unwrap_or_else(crate::font::default),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Top,
+                align_x: text::Alignment::Left,
+                align_y: alignment::Vertical::Top,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::default(),
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::default(),
             });
         }
 
@@ -227,7 +228,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &crate::Renderer,
         limits: &layout::Limits,
@@ -252,23 +253,23 @@ where
         )
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &crate::Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         update::<S, Message, AppMessage>(
             &event,
             layout,
             cursor,
             shell,
-            #[cfg(all(feature = "winit", feature = "wayland"))]
+            #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
             self.positioner.clone(),
             self.on_selected.clone(),
             self.selected,
@@ -327,24 +328,26 @@ where
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         _layout: Layout<'_>,
         _renderer: &crate::Renderer,
         operation: &mut dyn iced_core::widget::Operation,
     ) {
-        let state = tree.state.downcast_mut::<State>();
-        operation.custom(state, self.id.as_ref());
+        // TODO: double check operation handling
+        // let state = tree.state.downcast_mut::<State>();
+        // operation.custom(state, self.id.as_ref());
     }
 
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &crate::Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
-        #[cfg(all(feature = "winit", feature = "wayland"))]
+        #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
         if self.window_id.is_some() || self.on_surface_action.is_some() {
             return None;
         }
@@ -469,24 +472,40 @@ pub fn layout(
     let max_width = match width {
         Length::Shrink => {
             let measure = move |(label, paragraph): (_, Option<&mut crate::Plain>)| -> f32 {
-                let text = Text {
-                    content: label,
-                    bounds: Size::new(f32::MAX, f32::MAX),
-                    size: iced::Pixels(text_size),
-                    line_height: text_line_height,
-                    font: font.unwrap_or_else(crate::font::default),
-                    horizontal_alignment: alignment::Horizontal::Left,
-                    vertical_alignment: alignment::Vertical::Top,
-                    shaping: text::Shaping::Advanced,
-                    wrapping: text::Wrapping::default(),
-                    letter_spacing: None,
-                };
                 let paragraph = match paragraph {
                     Some(p) => {
+                        let text = Text {
+                            content: label,
+                            bounds: Size::new(f32::MAX, f32::MAX),
+                            size: iced::Pixels(text_size),
+                            line_height: text_line_height,
+                            font: font.unwrap_or_else(crate::font::default),
+                            align_x: text::Alignment::Left,
+                            align_y: alignment::Vertical::Top,
+                            shaping: text::Shaping::Advanced,
+                            wrapping: text::Wrapping::default(),
+                            ellipsize: text::Ellipsize::default(),
+                            letter_spacing: None,
+                        };
                         p.update(text);
                         p
                     }
-                    None => &mut crate::Plain::new(text),
+                    None => {
+                        let text = Text {
+                            content: label.to_string(),
+                            bounds: Size::new(f32::MAX, f32::MAX),
+                            size: iced::Pixels(text_size),
+                            line_height: text_line_height,
+                            font: font.unwrap_or_else(crate::font::default),
+                            align_x: text::Alignment::Left,
+                            align_y: alignment::Vertical::Top,
+                            shaping: text::Shaping::Advanced,
+                            wrapping: text::Wrapping::default(),
+                            ellipsize: text::Ellipsize::default(),
+                            letter_spacing: None,
+                        };
+                        &mut crate::Plain::new(text)
+                    }
                 };
                 paragraph.min_width().round()
             };
@@ -529,7 +548,7 @@ pub fn update<
     layout: Layout<'_>,
     cursor: mouse::Cursor,
     shell: &mut Shell<'_, Message>,
-    #[cfg(all(feature = "winit", feature = "wayland"))]
+    #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
     positioner: iced_runtime::platform_specific::wayland::popup::SctkPositioner,
     on_selected: Arc<dyn Fn(usize) -> Message + Send + Sync + 'static>,
     selected: Option<usize>,
@@ -544,7 +563,7 @@ pub fn update<
     text_size: Option<f32>,
     font: Option<crate::font::Font>,
     selected_option: Option<usize>,
-) -> event::Status {
+) {
     let state = state();
 
     let open = |shell: &mut Shell<'_, Message>,
@@ -555,7 +574,7 @@ pub fn update<
         *hovered_guard = selected;
         let id = window::Id::unique();
         state.popup_id = id;
-        #[cfg(all(feature = "winit", feature = "wayland"))]
+        #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
         if let Some(((on_surface_action, parent), action_map)) = on_surface_action
             .as_ref()
             .zip(_window_id)
@@ -575,7 +594,7 @@ pub fn update<
             let measure = |_label: &str, selection_paragraph: &crate::Paragraph| -> f32 {
                 selection_paragraph.min_width().round()
             };
-            let pad_width = padding.horizontal().mul_add(2.0, 16.0);
+            let pad_width = padding.x().mul_add(2.0, 16.0);
 
             let selections_width = selections
                 .iter()
@@ -642,7 +661,7 @@ pub fn update<
         state.close_operation = false;
         state.is_open.store(false, Ordering::SeqCst);
         if is_open {
-            #[cfg(all(feature = "winit", feature = "wayland"))]
+            #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
             if let Some(ref on_close) = on_surface_action {
                 shell.publish(on_close(surface::action::destroy_popup(state.popup_id)));
             }
@@ -665,16 +684,14 @@ pub fn update<
                 // Event wasn't processed by overlay, so cursor was clicked either outside it's
                 // bounds or on the drop-down, either way we close the overlay.
                 state.is_open.store(false, Ordering::Relaxed);
-                #[cfg(all(feature = "winit", feature = "wayland"))]
+                #[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
                 if let Some(on_close) = on_surface_action {
                     shell.publish(on_close(surface::action::destroy_popup(state.popup_id)));
                 }
-                event::Status::Captured
+                shell.capture_event();
             } else if cursor.is_over(layout.bounds()) {
                 open(shell, state, on_selected);
-                event::Status::Captured
-            } else {
-                event::Status::Ignored
+                shell.capture_event();
             }
         }
         Event::Mouse(mouse::Event::WheelScrolled {
@@ -689,17 +706,13 @@ pub fn update<
                     shell.publish((on_selected)(next_index));
                 }
 
-                event::Status::Captured
-            } else {
-                event::Status::Ignored
+                shell.capture_event();
             }
         }
         Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
             state.keyboard_modifiers = *modifiers;
-
-            event::Status::Ignored
         }
-        _ => event::Status::Ignored,
+        _ => {}
     }
 }
 
@@ -716,7 +729,7 @@ pub fn mouse_interaction(layout: Layout<'_>, cursor: mouse::Cursor) -> mouse::In
     }
 }
 
-#[cfg(all(feature = "winit", feature = "wayland"))]
+#[cfg(all(feature = "winit", feature = "wayland", target_os = "linux"))]
 /// Returns the current menu widget of a [`Dropdown`].
 #[allow(clippy::too_many_arguments)]
 pub fn menu_widget<
@@ -746,7 +759,7 @@ where
         .zip(state.selections.iter())
         .map(|(label, selection)| measure(label.as_ref(), selection.raw()))
         .fold(0.0, |next, current| current.max(next));
-    let pad_width = padding.horizontal().mul_add(2.0, 16.0);
+    let pad_width = padding.x().mul_add(2.0, 16.0);
 
     let width = selections_width + gap + pad_width + icon_width;
     let is_open = state.is_open.clone();
@@ -822,7 +835,7 @@ where
                 selection_paragraph.min_width().round()
             };
 
-            let pad_width = padding.horizontal().mul_add(2.0, 16.0);
+            let pad_width = padding.x().mul_add(2.0, 16.0);
 
             let icon_width = if icons.is_empty() { 0.0 } else { 24.0 };
 
@@ -883,23 +896,20 @@ pub fn draw<'a, S>(
             bounds,
             border: style.border,
             shadow: Shadow::default(),
+            snap: true,
         },
         style.background,
     );
 
     if let Some(handle) = state.icon.clone() {
         let svg_handle = svg::Svg::new(handle).color(style.text_color);
-
-        svg::Renderer::draw_svg(
-            renderer,
-            svg_handle,
-            Rectangle {
-                x: bounds.x + bounds.width - gap - 16.0,
-                y: bounds.center_y() - 8.0,
-                width: 16.0,
-                height: 16.0,
-            },
-        );
+        let bounds = Rectangle {
+            x: bounds.x + bounds.width - gap - 16.0,
+            y: bounds.center_y() - 8.0,
+            width: 16.0,
+            height: 16.0,
+        };
+        svg::Renderer::draw_svg(renderer, svg_handle, bounds, bounds);
     }
 
     if let Some(content) = selected.map(AsRef::as_ref).or(placeholder) {
@@ -908,7 +918,7 @@ pub fn draw<'a, S>(
         let mut bounds = Rectangle {
             x: bounds.x + padding.left,
             y: bounds.center_y(),
-            width: bounds.width - padding.horizontal(),
+            width: bounds.width - padding.x(),
             height: f32::from(text_line_height.to_absolute(Pixels(text_size))),
         };
 
@@ -932,11 +942,12 @@ pub fn draw<'a, S>(
                 line_height: text_line_height,
                 font,
                 bounds: bounds.size(),
-                horizontal_alignment: alignment::Horizontal::Left,
-                vertical_alignment: alignment::Vertical::Center,
+                align_x: text::Alignment::Left,
+                align_y: alignment::Vertical::Center,
                 shaping: text::Shaping::Advanced,
                 wrapping: text::Wrapping::default(),
                 letter_spacing: None,
+                ellipsize: text::Ellipsize::default(),
             },
             bounds.position(),
             style.text_color,

@@ -67,7 +67,6 @@ impl StyleSheet for Theme {
 
     fn appearance(&self, style: &Self::Style) -> Appearance {
         let cosmic = self.cosmic();
-        let component = &cosmic.background.component;
 
         match style {
             MenuBarStyle::Default => {

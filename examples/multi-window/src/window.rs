@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
-use cosmic::{
-    app::Core,
-    iced::{self, event, window, Subscription},
-    iced_core::{id, Alignment, Length, Point},
-    iced_widget::{column, container, scrollable, text},
-    prelude::*,
-    widget::{button, header_bar},
-};
+use cosmic::app::Core;
+use cosmic::iced::core::{id, Alignment, Length, Point};
+use cosmic::iced::widget::{column, container, scrollable, text};
+use cosmic::iced::{self, event, window, Subscription};
+use cosmic::prelude::*;
+use cosmic::widget::{button, header_bar};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {

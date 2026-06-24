@@ -1,13 +1,10 @@
-use iced::{
-    Rectangle,
-    futures::{
-        StreamExt,
-        channel::mpsc::{UnboundedReceiver, unbounded},
-        stream,
-    },
-};
+use iced::Rectangle;
+use iced::futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use iced::futures::{StreamExt, stream};
 use iced_futures::Subscription;
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 use super::RectangleTracker;
 
@@ -18,10 +15,10 @@ pub fn rectangle_tracker_subscription<
 >(
     id: I,
 ) -> Subscription<(I, RectangleUpdate<R>)> {
-    Subscription::run_with_id(
-        id,
-        stream::unfold(State::Ready, move |state| start_listening(id, state)),
-    )
+    Subscription::run_with(id, |id| {
+        let id = *id;
+        stream::unfold(State::Ready, move |state| start_listening(id, state))
+    })
 }
 
 pub enum State<I> {

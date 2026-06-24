@@ -1,14 +1,10 @@
 use derive_setters::Setters;
 
-use crate::widget::table::model::{
-    Entity, Model,
-    category::{ItemCategory, ItemInterface},
-    selection::Selectable,
-};
-use crate::{
-    Apply, Element, theme,
-    widget::{self, container, divider, menu},
-};
+use crate::widget::table::model::category::{ItemCategory, ItemInterface};
+use crate::widget::table::model::selection::Selectable;
+use crate::widget::table::model::{Entity, Model};
+use crate::widget::{self, container, divider, menu};
+use crate::{Apply, Element, theme};
 use iced::{Alignment, Border, Length, Padding};
 
 // THIS IS A PLACEHOLDER UNTIL A MORE SOPHISTICATED WIDGET CAN BE DEVELOPED
@@ -99,7 +95,7 @@ where
                 };
 
                 // Build the category header
-                widget::row()
+                widget::row::with_capacity(2)
                     .spacing(val.icon_spacing)
                     .push(widget::text::heading(category.to_string()))
                     .push_maybe(match sort_state {
@@ -152,7 +148,7 @@ where
                         categories
                             .iter()
                             .map(|category| {
-                                widget::row()
+                                widget::row::with_capacity(2)
                                     .spacing(val.icon_spacing)
                                     .push_maybe(
                                         item.get_icon(*category)
@@ -192,6 +188,7 @@ where
                                         ..Default::default()
                                     },
                                     shadow: Default::default(),
+                                    snap: true,
                                 }
                             }))
                             .apply(widget::mouse_area)
@@ -205,7 +202,7 @@ where
                             })
                             // Double click
                             .apply(|mouse_area| {
-                                if let Some(ref on_item_mb) = val.on_item_mb_left {
+                                if let Some(ref on_item_mb) = val.on_item_mb_double {
                                     mouse_area.on_double_click((on_item_mb)(entity))
                                 } else {
                                     mouse_area

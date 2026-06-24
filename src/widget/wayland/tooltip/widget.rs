@@ -14,16 +14,12 @@ use iced::Task;
 use iced_runtime::core::widget::Id;
 
 use iced_core::event::{self, Event};
-use iced_core::renderer;
-use iced_core::touch;
 use iced_core::widget::Operation;
 use iced_core::widget::tree::{self, Tree};
 use iced_core::{
-    Background, Clipboard, Color, Layout, Length, Padding, Point, Rectangle, Shell, Vector, Widget,
+    Background, Border, Clipboard, Color, Layout, Length, Padding, Point, Rectangle, Shadow, Shell,
+    Vector, Widget, layout, mouse, overlay, renderer, svg, touch,
 };
-use iced_core::{Border, mouse};
-use iced_core::{Shadow, overlay};
-use iced_core::{layout, svg};
 
 pub use super::{Catalog, Style};
 
@@ -211,7 +207,7 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &crate::Renderer,
         limits: &layout::Limits,
@@ -224,21 +220,22 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
             self.padding,
             |renderer, limits| {
                 self.content
-                    .as_widget()
+                    .as_widget_mut()
                     .layout(&mut tree.children[0], renderer, limits)
             },
         )
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
         renderer: &crate::Renderer,
         operation: &mut dyn Operation<()>,
     ) {
-        operation.container(None, layout.bounds(), &mut |operation| {
-            self.content.as_widget().operate(
+        operation.container(Some(&self.id), layout.bounds());
+        operation.traverse(&mut |operation| {
+            self.content.as_widget_mut().operate(
                 &mut tree.children[0],
                 layout
                     .children()
@@ -251,18 +248,18 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
         });
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &crate::Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        let status = update(
+    ) {
+        update(
             self.id.clone(),
             event.clone(),
             layout,
@@ -275,22 +272,21 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
             &self.on_surface_action,
             || tree.state.downcast_mut::<State>(),
         );
-        status.merge(
-            self.content.as_widget_mut().on_event(
-                &mut tree.children[0],
-                event,
-                layout
-                    .children()
-                    .next()
-                    .unwrap()
-                    .with_virtual_offset(layout.virtual_offset()),
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            ),
-        )
+
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout
+                .children()
+                .next()
+                .unwrap()
+                .with_virtual_offset(layout.virtual_offset()),
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
     }
 
     #[allow(clippy::too_many_lines)]
@@ -359,8 +355,9 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &crate::Renderer,
+        viewport: &Rectangle,
         mut translation: Vector,
     ) -> Option<overlay::Element<'b, Message, crate::Theme, crate::Renderer>> {
         let position = layout.bounds().position();
@@ -374,6 +371,7 @@ impl<'a, Message: 'static + Clone, TopLevelMessage: 'static + Clone>
                 .unwrap()
                 .with_virtual_offset(layout.virtual_offset()),
             renderer,
+            viewport,
             translation,
         )
     }
@@ -451,7 +449,7 @@ pub fn update<'a, Message: Clone + 'static, TopLevelMessage: Clone + 'static>(
     on_leave: &Message,
     on_surface_action: &dyn Fn(crate::surface::Action) -> Message,
     state: impl FnOnce() -> &'a mut State,
-) -> event::Status {
+) {
     match event {
         Event::Touch(touch::Event::FingerLifted { .. }) => {
             let state = state();
@@ -461,7 +459,8 @@ pub fn update<'a, Message: Clone + 'static, TopLevelMessage: Clone + 'static>(
 
                 shell.publish(on_leave.clone());
 
-                return event::Status::Captured;
+                shell.capture_event();
+                return;
             }
         }
 
@@ -579,8 +578,6 @@ pub fn update<'a, Message: Clone + 'static, TopLevelMessage: Clone + 'static>(
         }
         _ => {}
     }
-
-    event::Status::Ignored
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -611,6 +608,7 @@ pub fn draw<Renderer: iced_core::Renderer, Theme>(
                     radius: styling.border_radius,
                 },
                 shadow: Shadow::default(),
+                snap: true,
             },
             Color::TRANSPARENT,
         );
@@ -632,6 +630,7 @@ pub fn draw<Renderer: iced_core::Renderer, Theme>(
                         ..Default::default()
                     },
                     shadow: Shadow::default(),
+                    snap: true,
                 },
                 Background::Color([0.0, 0.0, 0.0, 0.5].into()),
             );
@@ -647,6 +646,7 @@ pub fn draw<Renderer: iced_core::Renderer, Theme>(
                         ..Default::default()
                     },
                     shadow: Shadow::default(),
+                    snap: true,
                 },
                 background,
             );
@@ -669,6 +669,7 @@ pub fn draw<Renderer: iced_core::Renderer, Theme>(
                         radius: styling.border_radius,
                     },
                     shadow: Shadow::default(),
+                    snap: true,
                 },
                 Color::TRANSPARENT,
             );

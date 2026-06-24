@@ -24,7 +24,7 @@
 //!     .on_press(Message::LaunchUrl(REPOSITORY))
 //!     .padding(0);
 //!
-//! let content = widget::column()
+//! let content = widget::column::with_capacity(3)
 //!     .push(widget::icon::from_name("my-app-icon"))
 //!     .push(widget::text::title3("My App Name"))
 //!     .push(link)
@@ -54,13 +54,16 @@ pub use iced::widget::{Canvas, canvas};
 pub use iced::widget::{Checkbox, checkbox};
 
 #[doc(inline)]
+pub use iced::widget::{Column, column};
+
+#[doc(inline)]
 pub use iced::widget::{ComboBox, combo_box};
 
 #[doc(inline)]
 pub use iced::widget::{Container, container};
 
 #[doc(inline)]
-pub use iced::widget::{Space, horizontal_space, vertical_space};
+pub use iced::widget::{Space, space};
 
 #[doc(inline)]
 pub use iced::widget::{Image, image};
@@ -75,10 +78,10 @@ pub use iced::widget::{MouseArea, mouse_area};
 pub use iced::widget::{PaneGrid, pane_grid};
 
 #[doc(inline)]
-pub use iced::widget::{ProgressBar, progress_bar};
+pub use iced::widget::{Responsive, responsive};
 
 #[doc(inline)]
-pub use iced::widget::{Responsive, responsive};
+pub use iced::widget::{Row, row};
 
 #[doc(inline)]
 pub use iced::widget::{Slider, VerticalSlider, slider, vertical_slider};
@@ -127,37 +130,13 @@ pub use color_picker::{ColorPicker, ColorPickerModel};
 #[doc(inline)]
 pub use iced::widget::qr_code;
 
+mod cards;
+#[doc(inline)]
+pub use cards::cards;
+
 pub mod context_drawer;
 #[doc(inline)]
 pub use context_drawer::{ContextDrawer, context_drawer};
-
-#[doc(inline)]
-pub use column::{Column, column};
-pub mod column {
-    //! A container which aligns its children in a column.
-
-    pub type Column<'a, Message> = iced::widget::Column<'a, Message, crate::Theme, crate::Renderer>;
-
-    #[must_use]
-    /// A container which aligns its children in a column.
-    pub fn column<'a, Message>() -> Column<'a, Message> {
-        Column::new()
-    }
-
-    #[must_use]
-    /// A pre-allocated [`column`].
-    pub fn with_capacity<'a, Message>(capacity: usize) -> Column<'a, Message> {
-        Column::with_capacity(capacity)
-    }
-
-    #[must_use]
-    /// A [`column`] that will be assigned an [`Iterator`] of children.
-    pub fn with_children<'a, Message>(
-        children: impl IntoIterator<Item = crate::Element<'a, Message>>,
-    ) -> Column<'a, Message> {
-        Column::with_children(children)
-    }
-}
 
 pub mod layer_container;
 #[doc(inline)]
@@ -175,47 +154,47 @@ pub use dialog::{Dialog, dialog};
 pub mod divider {
     /// Horizontal variant of a divider.
     pub mod horizontal {
-        use iced::widget::{Rule, horizontal_rule};
+        use iced::widget::{Rule, rule};
 
         /// Horizontal divider with default thickness
         #[must_use]
         pub fn default<'a>() -> Rule<'a, crate::Theme> {
-            horizontal_rule(1).class(crate::theme::Rule::Default)
+            rule::horizontal(1).class(crate::theme::Rule::Default)
         }
 
         /// Horizontal divider with light thickness
         #[must_use]
         pub fn light<'a>() -> Rule<'a, crate::Theme> {
-            horizontal_rule(1).class(crate::theme::Rule::LightDivider)
+            rule::horizontal(1).class(crate::theme::Rule::LightDivider)
         }
 
         /// Horizontal divider with heavy thickness.
         #[must_use]
         pub fn heavy<'a>() -> Rule<'a, crate::Theme> {
-            horizontal_rule(4).class(crate::theme::Rule::HeavyDivider)
+            rule::horizontal(4).class(crate::theme::Rule::HeavyDivider)
         }
     }
 
     /// Vertical variant of a divider.
     pub mod vertical {
-        use iced::widget::{Rule, vertical_rule};
+        use iced::widget::{Rule, rule};
 
         /// Vertical divider with default thickness
         #[must_use]
         pub fn default<'a>() -> Rule<'a, crate::Theme> {
-            vertical_rule(1).class(crate::theme::Rule::Default)
+            rule::vertical(1).class(crate::theme::Rule::Default)
         }
 
         /// Vertical divider with light thickness
         #[must_use]
         pub fn light<'a>() -> Rule<'a, crate::Theme> {
-            vertical_rule(4).class(crate::theme::Rule::LightDivider)
+            rule::vertical(4).class(crate::theme::Rule::LightDivider)
         }
 
         /// Vertical divider with heavy thickness.
         #[must_use]
         pub fn heavy<'a>() -> Rule<'a, crate::Theme> {
-            vertical_rule(10).class(crate::theme::Rule::HeavyDivider)
+            rule::vertical(10).class(crate::theme::Rule::HeavyDivider)
         }
     }
 }
@@ -236,6 +215,10 @@ pub mod flex_row;
 #[doc(inline)]
 pub use flex_row::{FlexRow, flex_row};
 
+pub mod reorderable_flex_row;
+#[doc(inline)]
+pub use reorderable_flex_row::{ReorderableFlexRow, reorderable_flex_row};
+
 pub mod grid;
 #[doc(inline)]
 pub use grid::{Grid, grid};
@@ -255,7 +238,7 @@ pub use id_container::{IdContainer, id_container};
 #[cfg(feature = "animated-image")]
 pub mod frames;
 
-pub use taffy::JustifyContent;
+pub use taffy::{JustifyContent, JustifyItems};
 
 pub mod list;
 #[doc(inline)]
@@ -275,6 +258,13 @@ pub mod popover;
 #[doc(inline)]
 pub use popover::{Popover, popover};
 
+pub mod progress_bar;
+#[doc(inline)]
+pub use progress_bar::{
+    circular, circular::Circular, determinate_circular, determinate_linear, indeterminate_circular,
+    indeterminate_linear, linear, linear::Linear, style,
+};
+
 pub mod radio;
 #[doc(inline)]
 pub use radio::{Radio, radio};
@@ -282,35 +272,6 @@ pub use radio::{Radio, radio};
 pub mod rectangle_tracker;
 #[doc(inline)]
 pub use rectangle_tracker::{RectangleTracker, rectangle_tracking_container};
-
-#[doc(inline)]
-pub use row::{Row, row};
-
-pub mod row {
-    //! A container which aligns its children in a row.
-
-    pub type Row<'a, Message> = iced::widget::Row<'a, Message, crate::Theme, crate::Renderer>;
-
-    #[must_use]
-    /// A container which aligns its children in a row.
-    pub fn row<'a, Message>() -> Row<'a, Message> {
-        Row::new()
-    }
-
-    #[must_use]
-    /// A pre-allocated [`row`].
-    pub fn with_capacity<'a, Message>(capacity: usize) -> Row<'a, Message> {
-        Row::with_capacity(capacity)
-    }
-
-    #[must_use]
-    /// A [`row`] that will be assigned an [`Iterator`] of children.
-    pub fn with_children<'a, Message>(
-        children: impl IntoIterator<Item = crate::Element<'a, Message>>,
-    ) -> Row<'a, Message> {
-        Row::with_children(children)
-    }
-}
 
 pub mod scrollable;
 #[doc(inline)]
@@ -346,12 +307,12 @@ pub use toaster::{Toast, ToastId, Toasts, toaster};
 
 mod toggler;
 #[doc(inline)]
-pub use toggler::toggler;
+pub use toggler::{Toggler, toggler};
 
 #[doc(inline)]
 pub use tooltip::{Tooltip, tooltip};
 
-#[cfg(all(feature = "wayland", feature = "winit"))]
+#[cfg(all(feature = "wayland", target_os = "linux", feature = "winit"))]
 pub mod wayland;
 
 pub mod tooltip {

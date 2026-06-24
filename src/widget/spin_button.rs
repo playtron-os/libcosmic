@@ -3,13 +3,10 @@
 
 //! A control for incremental adjustments of a value.
 
-use crate::{
-    Element, theme,
-    widget::{button, column, container, icon, row, text},
-};
+use crate::widget::{button, column, container, icon, row, text};
+use crate::{Element, theme};
 use apply::Apply;
-use iced::{Alignment, Length};
-use iced::{Border, Shadow};
+use iced::{Alignment, Border, Length, Shadow};
 use std::borrow::Cow;
 use std::ops::{Add, Sub};
 
@@ -313,6 +310,7 @@ fn container_style(theme: &crate::Theme) -> iced_widget::container::Style {
         background: None,
         border,
         shadow: Shadow::default(),
+        snap: true,
     }
 }
 

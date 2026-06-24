@@ -8,16 +8,16 @@ use std::sync::Arc;
 use super::{Action, Application, ApplicationExt, Subscription};
 use crate::theme::{THEME, Theme, ThemeType};
 use crate::{Core, Element, keyboard_nav};
-#[cfg(feature = "wayland")]
+#[cfg(all(feature = "wayland", target_os = "linux"))]
 use cctk::sctk::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
 use cosmic_theme::ThemeMode;
-#[cfg(not(any(feature = "multi-window", feature = "wayland")))]
+#[cfg(not(any(feature = "multi-window", feature = "wayland", target_os = "linux")))]
 use iced::Application as IcedApplication;
-#[cfg(feature = "wayland")]
+#[cfg(all(feature = "wayland", target_os = "linux"))]
 use iced::event::wayland;
-use iced::{Task, window};
+use iced::{Task, theme, window};
 use iced_futures::event::listen_with;
-#[cfg(feature = "wayland")]
+#[cfg(all(feature = "wayland", target_os = "linux"))]
 use iced_winit::SurfaceIdWrapper;
 use palette::color_difference::EuclideanDistance;
 
@@ -49,8 +49,8 @@ pub fn windowing_system() -> Option<WindowingSystem> {
     WINDOWING_SYSTEM.get().copied()
 }
 
-fn init_windowing_system<M>(handle: raw_window_handle::WindowHandle) -> crate::Action<M> {
-    let raw: &raw_window_handle::RawWindowHandle = handle.as_ref();
+fn init_windowing_system<M>(handle: window::raw_window_handle::WindowHandle) -> crate::Action<M> {
+    let raw = handle.as_ref();
     let system = match raw {
         window::raw_window_handle::RawWindowHandle::UiKit(_) => WindowingSystem::UiKit,
         window::raw_window_handle::RawWindowHandle::AppKit(_) => WindowingSystem::AppKit,
@@ -83,7 +83,7 @@ fn init_windowing_system<M>(handle: raw_window_handle::WindowHandle) -> crate::A
 #[derive(Default)]
 pub struct Cosmic<App: Application> {
     pub app: App,
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     pub surface_views: HashMap<
         window::Id,
         (
@@ -138,7 +138,7 @@ where
     ) -> iced::Task<crate::Action<T::Message>> {
         #[cfg(feature = "surface-message")]
         match _surface_message {
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::AppSubsurface(settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings)
                     .ok()
@@ -168,7 +168,7 @@ where
                     iced_winit::commands::subsurface::get_subsurface(settings(&mut self.app))
                 }
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::Subsurface(settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings)
                     .ok()
@@ -196,7 +196,7 @@ where
                     iced_winit::commands::subsurface::get_subsurface(settings())
                 }
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::AppPopup(settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings)
                     .ok()
@@ -225,15 +225,26 @@ where
                     iced_winit::commands::popup::get_popup(settings(&mut self.app))
                 }
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::DestroyPopup(id) => {
                 iced_winit::commands::popup::destroy_popup(id)
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
+            crate::surface::Action::DestroyTooltipPopup => {
+                #[cfg(feature = "applet")]
+                {
+                    iced_winit::commands::popup::destroy_popup(*crate::applet::TOOLTIP_WINDOW_ID)
+                }
+                #[cfg(not(feature = "applet"))]
+                {
+                    Task::none()
+                }
+            }
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::DestroySubsurface(id) => {
                 iced_winit::commands::subsurface::destroy_subsurface(id)
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::DestroyWindow(id) => iced::window::close(id),
             crate::surface::Action::ResponsiveMenuBar {
                 menu_bar,
@@ -244,7 +255,7 @@ where
                 core.menu_bars.insert(menu_bar, (limits, size));
                 iced::Task::none()
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::Popup(settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings)
                     .ok()
@@ -271,7 +282,7 @@ where
                     iced_winit::commands::popup::get_popup(settings())
                 }
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::AppWindow(id, settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings).ok().and_then(|s| {
                     s.downcast::<Box<dyn Fn(&mut T) -> iced::window::Settings + Send + Sync>>()
@@ -310,7 +321,7 @@ where
                     .discard()
                 }
             }
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             crate::surface::Action::Window(id, settings, view) => {
                 let Some(settings) = std::sync::Arc::try_unwrap(settings).ok().and_then(|s| {
                     s.downcast::<Box<dyn Fn() -> iced::window::Settings + Send + Sync>>()
@@ -369,7 +380,16 @@ where
             crate::Action::Cosmic(message) => self.cosmic_update(message),
             crate::Action::None => iced::Task::none(),
             #[cfg(feature = "single-instance")]
-            crate::Action::DbusActivation(message) => self.app.dbus_activation(message),
+            crate::Action::DbusActivation(message) => {
+                let mut task = self.app.dbus_activation(message);
+
+                if let Some(id) = self.app.core().main_window_id() {
+                    let unminimize = iced_runtime::window::minimize::<()>(id, false);
+                    task = task.chain(unminimize.discard());
+                }
+
+                task
+            }
         };
 
         #[cfg(all(target_env = "gnu", not(target_os = "windows")))]
@@ -388,15 +408,16 @@ where
         f64::from(self.app.core().scale_factor())
     }
 
-    pub fn style(&self, theme: &Theme) -> iced_runtime::Appearance {
+    pub fn style(&self, theme: &Theme) -> theme::Style {
         if let Some(style) = self.app.style() {
             style
         } else if self.app.core().window.is_maximized {
             let theme = THEME.lock().unwrap();
-            crate::style::iced::application::appearance(theme.borrow())
+            crate::style::iced::application::style(theme.borrow())
         } else {
             let theme = THEME.lock().unwrap();
-            iced_runtime::Appearance {
+
+            theme::Style {
                 background_color: iced_core::Color::TRANSPARENT,
                 icon_color: theme.cosmic().on_bg_color().into(),
                 text_color: theme.cosmic().on_bg_color().into(),
@@ -426,7 +447,7 @@ where
                 iced::Event::Mouse(iced::mouse::Event::CursorLeft) => {
                     return Some(Action::WindowHovered(false));
                 }
-                #[cfg(feature = "wayland")]
+                #[cfg(all(feature = "wayland", target_os = "linux"))]
                 iced::Event::PlatformSpecific(iced::event::PlatformSpecific::Wayland(event)) => {
                     match event {
                         wayland::Event::Popup(wayland::PopupEvent::Done, _, id)
@@ -439,7 +460,7 @@ where
                         ) => {
                             return Some(Action::SuggestedBounds(b));
                         }
-                        #[cfg(feature = "wayland")]
+                        #[cfg(all(feature = "wayland", target_os = "linux"))]
                         wayland::Event::Window(iced::event::wayland::WindowEvent::WindowState(
                             s,
                         )) => {
@@ -556,7 +577,7 @@ where
 
     #[cfg(feature = "multi-window")]
     pub fn view(&self, id: window::Id) -> Element<'_, crate::Action<T::Message>> {
-        #[cfg(feature = "wayland")]
+        #[cfg(all(feature = "wayland", target_os = "linux"))]
         if let Some((_, _, v)) = self.surface_views.get(&id) {
             return v(&self.app);
         }
@@ -607,7 +628,7 @@ impl<T: Application> Cosmic<T> {
     fn cosmic_update(&mut self, message: Action) -> iced::Task<crate::Action<T::Message>> {
         match message {
             Action::WindowMaximized(id, maximized) => {
-                #[cfg(not(feature = "wayland"))]
+                #[cfg(not(all(feature = "wayland", target_os = "linux")))]
                 if self
                     .app
                     .core()
@@ -632,12 +653,12 @@ impl<T: Application> Cosmic<T> {
                 self.app.on_window_resize(id, width, height);
 
                 //TODO: more efficient test of maximized (winit has no event for maximize if set by the OS)
-                return iced::window::get_maximized(id).map(move |maximized| {
+                return iced::window::is_maximized(id).map(move |maximized| {
                     crate::Action::Cosmic(Action::WindowMaximized(id, maximized))
                 });
             }
 
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             Action::WindowState(id, state) => {
                 if self
                     .app
@@ -689,7 +710,7 @@ impl<T: Application> Cosmic<T> {
                 }
             }
 
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             Action::WmCapabilities(id, capabilities) => {
                 if self
                     .app
@@ -708,10 +729,10 @@ impl<T: Application> Cosmic<T> {
 
             Action::KeyboardNav(message) => match message {
                 keyboard_nav::Action::FocusNext => {
-                    return iced::widget::focus_next().map(crate::Action::Cosmic);
+                    return iced::widget::operation::focus_next().map(crate::Action::Cosmic);
                 }
                 keyboard_nav::Action::FocusPrevious => {
-                    return iced::widget::focus_previous().map(crate::Action::Cosmic);
+                    return iced::widget::operation::focus_previous().map(crate::Action::Cosmic);
                 }
                 keyboard_nav::Action::Escape => return self.app.on_escape(),
                 keyboard_nav::Action::Search => return self.app.on_search(),
@@ -796,7 +817,7 @@ impl<T: Application> Cosmic<T> {
                         new_theme.theme_type.prefer_dark(prefer_dark);
 
                         cosmic_theme.set_theme(new_theme.theme_type);
-                        #[cfg(feature = "wayland")]
+                        #[cfg(all(feature = "wayland", target_os = "linux"))]
                         if self.app.core().sync_window_border_radii_to_theme() {
                             use iced_runtime::platform_specific::wayland::CornerRadius;
                             use iced_winit::platform_specific::commands::corner_radius::corner_radius;
@@ -942,7 +963,7 @@ impl<T: Application> Cosmic<T> {
                         // Only apply update if the theme is set to load a system theme
                         if let ThemeType::System { .. } = cosmic_theme.theme_type {
                             cosmic_theme.set_theme(new_theme.theme_type);
-                            #[cfg(feature = "wayland")]
+                            #[cfg(all(feature = "wayland", target_os = "linux"))]
                             if self.app.core().sync_window_border_radii_to_theme() {
                                 use iced_runtime::platform_specific::wayland::CornerRadius;
                                 use iced_winit::platform_specific::commands::corner_radius::corner_radius;
@@ -1031,15 +1052,28 @@ impl<T: Application> Cosmic<T> {
                 }
                 return Task::batch(cmds);
             }
-            Action::Activate(_token) =>
-            {
-                #[cfg(feature = "wayland")]
+            Action::Activate(_token) => {
                 if let Some(id) = self.app.core().main_window_id() {
-                    return iced_winit::platform_specific::commands::activation::activate(
-                        id,
-                        #[allow(clippy::used_underscore_binding)]
-                        _token,
-                    );
+                    // Unminimize window before requesting to activate it.
+                    let mut task = iced_runtime::window::minimize(id, false);
+
+                    #[cfg(all(feature = "wayland", target_os = "linux"))]
+                    {
+                        task = task.chain(
+                            iced_winit::platform_specific::commands::activation::activate(
+                                id,
+                                #[allow(clippy::used_underscore_binding)]
+                                _token,
+                            ),
+                        )
+                    }
+
+                    #[cfg(not(all(feature = "wayland", target_os = "linux")))]
+                    {
+                        task = task.chain(iced_runtime::window::gain_focus(id));
+                    }
+
+                    return task;
                 }
             }
 
@@ -1051,7 +1085,7 @@ impl<T: Application> Cosmic<T> {
                     *v == 0
                 }) {
                     self.opened_surfaces.remove(&id);
-                    #[cfg(feature = "wayland")]
+                    #[cfg(all(feature = "wayland", target_os = "linux"))]
                     self.surface_views.remove(&id);
                     self.tracked_windows.remove(&id);
                 }
@@ -1173,7 +1207,8 @@ impl<T: Application> Cosmic<T> {
                 #[cfg(all(
                     feature = "wayland",
                     feature = "multi-window",
-                    feature = "surface-message"
+                    feature = "surface-message",
+                    target_os = "linux"
                 ))]
                 if let Some((
                     parent,
@@ -1224,7 +1259,7 @@ impl<T: Application> Cosmic<T> {
                 core.applet.suggested_bounds = b;
             }
             Action::Opened(id) => {
-                #[cfg(feature = "wayland")]
+                #[cfg(all(feature = "wayland", target_os = "linux"))]
                 if self.app.core().sync_window_border_radii_to_theme() {
                     use iced_runtime::platform_specific::wayland::CornerRadius;
                     use iced_winit::platform_specific::commands::corner_radius::corner_radius;
@@ -1273,14 +1308,14 @@ impl<App: Application> Cosmic<App> {
     pub fn new(app: App) -> Self {
         Self {
             app,
-            #[cfg(feature = "wayland")]
+            #[cfg(all(feature = "wayland", target_os = "linux"))]
             surface_views: HashMap::new(),
             tracked_windows: HashSet::new(),
             opened_surfaces: HashMap::new(),
         }
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     /// Create a subsurface
     pub fn get_subsurface(
         &mut self,
@@ -1303,7 +1338,7 @@ impl<App: Application> Cosmic<App> {
         get_subsurface(settings)
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     /// Create a subsurface
     pub fn get_popup(
         &mut self,
@@ -1325,7 +1360,7 @@ impl<App: Application> Cosmic<App> {
         get_popup(settings)
     }
 
-    #[cfg(feature = "wayland")]
+    #[cfg(all(feature = "wayland", target_os = "linux"))]
     /// Create a window surface
     pub fn get_window(
         &mut self,

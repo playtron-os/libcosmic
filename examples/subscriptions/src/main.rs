@@ -5,7 +5,8 @@
 
 use cosmic::app::{Core, Settings, Task};
 use cosmic::iced::Subscription;
-use cosmic::{executor, prelude::*, widget};
+use cosmic::prelude::*;
+use cosmic::{executor, widget};
 
 /// Runs application with these settings
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,7 +65,7 @@ impl cosmic::Application for App {
 
     /// Creates a view after each update.
     fn view(&self) -> Element<'_, Self::Message> {
-        widget::row().into()
+        widget::Row::new().into()
     }
 }
 

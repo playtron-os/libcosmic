@@ -7,10 +7,9 @@ use std::collections::HashMap;
 
 use chrono::Datelike;
 use cosmic::app::{Core, Settings, Task};
-use cosmic::iced_core::Size;
+use cosmic::iced::Size;
 use cosmic::prelude::*;
-use cosmic::widget::table;
-use cosmic::widget::{self, nav_bar};
+use cosmic::widget::{self, nav_bar, table};
 use cosmic::{executor, iced};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Hash)]

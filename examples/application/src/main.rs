@@ -5,9 +5,10 @@
 
 use cosmic::app::Settings;
 use cosmic::iced::{Alignment, Length, Size};
+use cosmic::prelude::*;
 use cosmic::widget::menu::{self, KeyBind};
 use cosmic::widget::nav_bar;
-use cosmic::{executor, iced, prelude::*, widget, Core};
+use cosmic::{executor, iced, widget, Core};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -54,8 +55,9 @@ impl widget::menu::Action for Action {
 /// Runs application with these settings
 #[rustfmt::skip]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // tracing_subscriber::fmt::init();
-    // let _ = tracing_log::LogTracer::init();
+
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
 
     let input = vec![
         (Page::Page1, "🖖 Hello from libcosmic.".into()),
@@ -66,9 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = Settings::default()
         .size(Size::new(1024., 768.));
-
-    cosmic::app::run::<App>(settings, input)?;
-
+    cosmic::app::run::<App>(settings, input).unwrap();
     Ok(())
 }
 
@@ -83,6 +83,8 @@ pub enum Message {
     Hi,
     Hi2,
     Hi3,
+    Tick,
+    ValueChanged(f32),
 }
 
 /// The [`App`] stores application-specific state.
@@ -93,6 +95,8 @@ pub struct App {
     input_2: String,
     hidden: bool,
     keybinds: HashMap<KeyBind, Action>,
+    progress: f32,
+    progress_slider: f32,
 }
 
 /// Implement [`cosmic::Application`] to integrate with COSMIC.
@@ -134,6 +138,8 @@ impl cosmic::Application for App {
             input_2: String::new(),
             hidden: true,
             keybinds: HashMap::new(),
+            progress: 0.0,
+            progress_slider: 0.0,
         };
 
         let command = app.update_title();
@@ -179,8 +185,18 @@ impl cosmic::Application for App {
             Message::Hi3 => {
                 dbg!("hi 3");
             }
+            Message::Tick => {
+                self.progress = (self.progress + 0.01) % 1.0;
+            }
+            Message::ValueChanged(value) => {
+                self.progress_slider = value;
+            }
         }
         Task::none()
+    }
+
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        iced::time::every(std::time::Duration::from_millis(64)).map(|_| Message::Tick)
     }
 
     /// Creates a view after each update.
@@ -191,7 +207,7 @@ impl cosmic::Application for App {
             .map_or("No page selected", String::as_str);
 
         let centered = widget::container(
-            widget::column()
+            widget::column::with_capacity(16)
                 .push(widget::text::body(page_content))
                 .push(
                     widget::text_input::text_input("", &self.input_1)
@@ -212,6 +228,59 @@ impl cosmic::Application for App {
                     widget::text_input::search_input("", &self.input_2)
                         .on_input(Message::Input2)
                         .on_clear(Message::Ignore),
+                )
+                .push(widget::progress_bar::circular::Circular::new().size(50.0))
+                .push(widget::progress_bar::circular::Circular::new().size(20.0))
+                .push(
+                    widget::progress_bar::linear::Linear::new()
+                        .girth(10.0)
+                        .width(Length::Fill),
+                )
+                .push(
+                    widget::progress_bar::circular::Circular::new()
+                        .bar_height(10.0)
+                        .size(50.0)
+                        .progress(self.progress),
+                )
+                .push(
+                    widget::progress_bar::linear::Linear::new()
+                        .girth(10.0)
+                        .progress(self.progress)
+                        .width(Length::Fill),
+                )
+                .push(
+                    widget::slider(0.0..=1.0, self.progress_slider, Message::ValueChanged)
+                        .step(0.001),
+                )
+                .push(
+                    widget::progress_bar::linear::Linear::new()
+                        .girth(10.0)
+                        .progress(self.progress_slider)
+                        .width(Length::Fill)
+                        .markers([0.25, 0.5, 0.75])
+                        .segment_spacing(2),
+                )
+                .push(
+                    widget::progress_bar::circular::Circular::new()
+                        .size(50.0)
+                        .progress(0.0),
+                )
+                .push(
+                    widget::progress_bar::linear::Linear::new()
+                        .girth(10.0)
+                        .progress(0.0)
+                        .width(Length::Fill),
+                )
+                .push(
+                    widget::progress_bar::circular::Circular::new()
+                        .size(50.0)
+                        .progress(1.0),
+                )
+                .push(
+                    widget::progress_bar::linear::Linear::new()
+                        .girth(10.0)
+                        .progress(1.0)
+                        .width(Length::Fill),
                 )
                 .spacing(cosmic::theme::spacing().space_s)
                 .width(Length::Fill)

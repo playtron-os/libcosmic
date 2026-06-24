@@ -6,7 +6,7 @@
 use apply::Apply;
 use cosmic::app::{Core, Settings, Task};
 use cosmic::dialog::file_chooser::{self, FileFilter};
-use cosmic::iced_core::Length;
+use cosmic::iced::Length;
 use cosmic::widget::button;
 use cosmic::{executor, iced, ApplicationExt, Element};
 use std::sync::Arc;
@@ -207,7 +207,7 @@ impl cosmic::Application for App {
             );
 
             content.push(
-                iced::widget::vertical_space()
+                iced::widget::space::vertical()
                     .height(Length::Fixed(12.0))
                     .into(),
             );
