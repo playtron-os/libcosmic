@@ -827,6 +827,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     .align_x(iced::Alignment::End)
                     .width(Length::Shrink),
             )
+            .align_y(iced::Alignment::Center)
             .height(header_height)
             .padding(header_padding)
             .spacing(8);

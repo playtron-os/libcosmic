@@ -382,8 +382,24 @@ pub fn menu_items<
                 }
                 MenuItem::Divider => {
                     if i != size - 1 {
+                        // In the modernized iced, a horizontal rule's thickness is
+                        // its full height (there is no separate line-width field), so
+                        // `rule::horizontal(9)` would draw a 9px slab. Render a 1px
+                        // hairline centered in a 9px fixed-height row to recreate the
+                        // subtle, inset icetron divider with breathing room.
+                        //
+                        // The height MUST be fixed: menu_inner's Dynamic item-height
+                        // path only indexes `tree[mt.index]` for `Shrink` children, and
+                        // that index can be out of bounds for divider items — a fixed
+                        // height keeps this element on the safe (non-indexing) path,
+                        // matching the original `rule::horizontal(9)` behavior.
                         trees.push(MenuTree::<Message>::from(Element::from(
-                            iced::widget::rule::horizontal(9).class(theme::Rule::LightDivider),
+                            crate::widget::container(
+                                iced::widget::rule::horizontal(1)
+                                    .class(theme::Rule::LightDivider),
+                            )
+                            .height(Length::Fixed(9.0))
+                            .padding([4, 0]),
                         )));
                     }
                 }

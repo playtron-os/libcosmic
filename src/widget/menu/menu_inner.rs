@@ -1706,10 +1706,17 @@ fn get_children_layout<Message>(
                     .with_data_mut(|w| match w.as_widget_mut().size().height {
                         Length::Fixed(f) => Size::new(width, f),
                         Length::Shrink => {
+                            // Defensive: if the per-item index and the widget tree
+                            // slice ever desync (e.g. a stale diff), fall back to the
+                            // dynamic default height instead of panicking on an
+                            // out-of-bounds index.
+                            let Some(child_tree) = tree.get_mut(mt.index) else {
+                                return Size::new(width, f32::from(d));
+                            };
                             let l_height = w
                                 .as_widget_mut()
                                 .layout(
-                                    &mut tree[mt.index],
+                                    child_tree,
                                     renderer,
                                     &Limits::new(Size::ZERO, Size::new(width, f32::MAX)),
                                 )
