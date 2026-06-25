@@ -3,6 +3,29 @@
 
 //! Stylesheet implements for [`crate::Theme`]
 
+use iced_core::Color;
+
+/// Mode-aware "ink" color matching icetron's opacity-based tokens: white at
+/// `alpha`/255 in dark mode, black at `alpha`/255 in light mode. Used for text,
+/// borders, dividers, and neutral hover/pressed states so menu and header
+/// chrome adapt to dark/light like icetron-theme-humain does.
+#[must_use]
+pub(crate) fn ink(is_dark: bool, alpha: u8) -> Color {
+    let c = if is_dark { 1.0 } else { 0.0 };
+    Color::from_rgba(c, c, c, f32::from(alpha) / 255.0)
+}
+
+/// Mode-aware elevated surface for menus and header chrome — icetron
+/// `surface-elevated`/`card`: white in light mode, `#1e1e1e` in dark mode.
+#[must_use]
+pub(crate) fn elevated_surface(is_dark: bool) -> Color {
+    if is_dark {
+        Color::from_rgb8(30, 30, 30)
+    } else {
+        Color::WHITE
+    }
+}
+
 mod button;
 pub use self::button::Button;
 

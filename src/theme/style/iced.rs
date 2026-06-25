@@ -1104,7 +1104,9 @@ impl rule::Catalog for Theme {
                 fill_mode: rule::FillMode::Full,
             },
             Rule::LightDivider => rule::Style {
-                color: self.current_container().divider.into(),
+                // icetron dropdown_divider == border (8%), adapts dark/light
+                color: crate::theme::style::ink(self.cosmic().is_dark, 20).into(),
+                // This base's `rule::Style` still has `width` and no `snap`.
                 width: 1,
                 radius: 0.0.into(),
                 fill_mode: rule::FillMode::Padded(8),

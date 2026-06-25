@@ -71,18 +71,23 @@ impl StyleSheet for Theme {
 
         match style {
             MenuBarStyle::Default => {
+                let dark = cosmic.is_dark;
                 Appearance {
-                    background: Color::WHITE,
+                    // icetron elevated surface (white / #1e1e1e), adapts dark/light
+                    background: crate::theme::style::elevated_surface(dark),
                     border_width: 1.0,
                     bar_border_radius: cosmic.corner_radii.radius_xl,
                     menu_border_radius: [8.0; 4],
-                    border_color: Color::from_rgba(0.0, 0.0, 0.0, 13.0 / 255.0),
-                    // 4px top/bottom creates visual padding between items and
-                    // container edge. 1px left/right insets items from the border.
-                    // Popup surface is sized to accommodate the expand.
-                    background_expand: [4, 1, 4, 1],
-                    // Path highlight for active folder item (8% black, matches hover bg)
-                    path: Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0),
+                    // icetron border (8%), adapts dark/light
+                    border_color: crate::theme::style::ink(dark, 20),
+                    // Inset items from all edges so item rows / hover highlights
+                    // stay clear of the 8px rounded corners (an 8px radius needs
+                    // ~2.3px diagonal clearance; 4px gives margin) — matches the
+                    // inset icetron dropdown look. Popup surface is sized to
+                    // accommodate the expand.
+                    background_expand: [4, 4, 4, 4],
+                    // Path highlight for active folder item (8% neutral, matches hover bg)
+                    path: crate::theme::style::ink(dark, 20),
                     // No shadow — Wayland popup surfaces clip shadows at their bounds
                     shadow: vec![],
                 }
