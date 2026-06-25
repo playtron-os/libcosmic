@@ -196,12 +196,9 @@ impl Catalog for crate::Theme {
 
         appearance(self, focused, selected, false, style, move |component| {
             if matches!(style, Button::MenuItem | Button::MenuFolder) {
-                // icetron: transparent bg, text_secondary (60% black)
-                return (
-                    Color::TRANSPARENT,
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                );
+                // icetron: transparent bg, text_primary label (adapts dark/light)
+                let t = crate::theme::style::ink(self.cosmic().is_dark, 222);
+                return (Color::TRANSPARENT, Some(t), Some(t));
             }
             let text_color = if matches!(
                 style,
@@ -224,12 +221,9 @@ impl Catalog for crate::Theme {
 
         appearance(self, false, false, true, style, |component| {
             if matches!(style, Button::MenuFolder) {
-                // Menu folders have no on_press; use text_secondary to match MenuItem active
-                return (
-                    Color::TRANSPARENT,
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                );
+                // Menu folders have no on_press; match MenuItem idle (text_primary)
+                let t = crate::theme::style::ink(self.cosmic().is_dark, 222);
+                return (Color::TRANSPARENT, Some(t), Some(t));
             }
             let mut background = Color::from(component.base);
             background.a *= 0.5;
@@ -258,12 +252,10 @@ impl Catalog for crate::Theme {
             style,
             |component| {
                 if matches!(style, Button::MenuItem | Button::MenuFolder) {
-                    // icetron: state_hovered_neutral bg (8% black), text_primary (87% black)
-                    return (
-                        Color::from_rgba(0.0, 0.0, 0.0, 20.0 / 255.0),
-                        Some(Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0)),
-                        Some(Color::from_rgba(0.0, 0.0, 0.0, 222.0 / 255.0)),
-                    );
+                    // icetron: state_hovered_neutral bg (8%), text_primary (87%)
+                    let dark = self.cosmic().is_dark;
+                    let t = crate::theme::style::ink(dark, 222);
+                    return (crate::theme::style::ink(dark, 20), Some(t), Some(t));
                 }
                 let text_color = if matches!(
                     style,
@@ -287,12 +279,10 @@ impl Catalog for crate::Theme {
 
         appearance(self, focused, selected, false, style, |component| {
             if matches!(style, Button::MenuItem | Button::MenuFolder) {
-                // icetron: state_pressed_neutral bg (12% black), text_secondary
-                return (
-                    Color::from_rgba(0.0, 0.0, 0.0, 30.0 / 255.0),
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 153.0 / 255.0)),
-                );
+                // icetron: state_pressed_neutral bg (12%), text_primary
+                let dark = self.cosmic().is_dark;
+                let t = crate::theme::style::ink(dark, 222);
+                return (crate::theme::style::ink(dark, 31), Some(t), Some(t));
             }
             let text_color = if matches!(
                 style,

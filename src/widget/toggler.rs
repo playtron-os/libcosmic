@@ -221,7 +221,9 @@ impl<'a, Message> Widget<Message, crate::Theme, crate::Renderer> for Toggler<'a,
                     layout::Node::new(iced_core::Size::ZERO)
                 }
             },
-            |_| layout::Node::new(Size::new(48., 24.)),
+            // Track scales with `size` (height = size, 2:1 width) so callers can
+            // size the toggle. Default (DEFAULT_SIZE = 24) → the classic 48x24.
+            |_| layout::Node::new(Size::new(self.size * 2.0, self.size)),
         );
         res
     }

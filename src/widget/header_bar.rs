@@ -17,6 +17,14 @@ use iced_core::{
 use std::borrow::Cow;
 use std::time::{Duration, Instant};
 
+/// Theme-aware header title color: icetron `text_primary` (87%), adapts dark/light.
+fn header_title_style(theme: &crate::Theme) -> iced_widget::text::Style {
+    iced_widget::text::Style {
+        color: Some(crate::theme::style::ink(theme.cosmic().is_dark, 222)),
+        ..Default::default()
+    }
+}
+
 // ── Animated container background ──────────────────────────────────────────────
 //
 // Minimal widget that wraps content and smoothly animates its background color
@@ -724,7 +732,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                 .size(14.0)
                 .line_height(iced::widget::text::LineHeight::Absolute(iced::Pixels(20.0)))
                 .font(crate::font::medium())
-                .class(Color::from_rgba8(0x1B, 0x1B, 0x1B, 1.0))
+                .class(crate::theme::Text::Custom(header_title_style))
                 .into();
 
             let title_el: Element<'a, Message> = if let Some(icon_handle) = self.app_icon.take() {
@@ -849,10 +857,12 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         )
         .width(Length::Fill)
         .height(Length::Fixed(1.0))
-        .class(crate::theme::Container::custom(|_theme| {
+        .class(crate::theme::Container::custom(|theme| {
             iced_widget::container::Style {
-                background: Some(iced::Background::Color(Color::from_rgba8(
-                    240, 240, 241, 1.0,
+                // icetron border (8%), adapts dark/light
+                background: Some(iced::Background::Color(crate::theme::style::ink(
+                    theme.cosmic().is_dark,
+                    20,
                 ))),
                 ..Default::default()
             }
@@ -871,10 +881,14 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     let cosmic = theme.cosmic();
                     let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
 
+                    let dark = cosmic.is_dark;
+                    let ink = crate::theme::style::ink(dark, 222);
                     iced_widget::container::Style {
-                        icon_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                        text_color: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                        background: Some(iced::Background::Color(Color::WHITE)),
+                        icon_color: Some(ink),
+                        text_color: Some(ink),
+                        background: Some(iced::Background::Color(
+                            crate::theme::style::elevated_surface(dark),
+                        )),
                         border: Border {
                             radius: [
                                 if sharp { 0.0 } else { window_radius[0] },
@@ -911,41 +925,47 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
         const ICON_RESTORE: &[u8] = include_bytes!("../../res/icons/window-restore.svg");
         const ICON_CLOSE: &[u8] = include_bytes!("../../res/icons/window-close.svg");
 
-        // Matches icetron: fill_skim() = rgba(0, 0, 0, 102) = 40% black
-        let icon_color = Color::from_rgba(0.0, 0.0, 0.0, 0.4);
+        // icetron icon color (fill_skim, 40%) is applied per-button via the
+        // theme-aware closures below so it adapts to dark/light.
         // Matches icetron: ui_size_icon_2xs = 14, ui_size_icon_2md = 28
         let icon_size: u16 = 14;
         let button_size = 28.0;
         let radius = 9999.0_f32; // radii_max
 
-        // Ghost button style for minimize/maximize
+        // Ghost button style for minimize/maximize (icetron fill_skim 40% icon,
+        // neutral 8%/12% hover/pressed bg — all adapt dark/light).
         let ghost_button_style = || {
-            let hover_bg = Color::from_rgba(0.0, 0.0, 0.0, 0.08);
-            let pressed_bg = Color::from_rgba(0.0, 0.0, 0.0, 0.12);
+            use crate::theme::style::ink;
             crate::theme::Button::Custom {
-                active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                active: Box::new(move |_focused, theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(icon_color),
+                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
-                disabled: Box::new(move |_theme| crate::widget::button::Style {
+                disabled: Box::new(move |theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(icon_color),
+                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
-                hovered: Box::new(move |_focused, _theme| crate::widget::button::Style {
-                    background: Some(iced::Background::Color(hover_bg)),
-                    icon_color: Some(icon_color),
-                    border_radius: radius.into(),
-                    ..crate::widget::button::Style::new()
+                hovered: Box::new(move |_focused, theme| {
+                    let dark = theme.cosmic().is_dark;
+                    crate::widget::button::Style {
+                        background: Some(iced::Background::Color(ink(dark, 20))),
+                        icon_color: Some(ink(dark, 102)),
+                        border_radius: radius.into(),
+                        ..crate::widget::button::Style::new()
+                    }
                 }),
-                pressed: Box::new(move |_focused, _theme| crate::widget::button::Style {
-                    background: Some(iced::Background::Color(pressed_bg)),
-                    icon_color: Some(icon_color),
-                    border_radius: radius.into(),
-                    ..crate::widget::button::Style::new()
+                pressed: Box::new(move |_focused, theme| {
+                    let dark = theme.cosmic().is_dark;
+                    crate::widget::button::Style {
+                        background: Some(iced::Background::Color(ink(dark, 31))),
+                        icon_color: Some(ink(dark, 102)),
+                        border_radius: radius.into(),
+                        ..crate::widget::button::Style::new()
+                    }
                 }),
             }
         };
@@ -956,16 +976,17 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             let error_color = Color::from_rgb8(0xFF, 0x3B, 0x30);
             // Matches icetron: feedback_error_tertiary = rgba(255, 59, 48, 26) ≈ 10% red
             let error_bg = Color::from_rgba8(0xFF, 0x3B, 0x30, 26.0 / 255.0);
+            use crate::theme::style::ink;
             crate::theme::Button::Custom {
-                active: Box::new(move |_focused, _theme| crate::widget::button::Style {
+                active: Box::new(move |_focused, theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(icon_color),
+                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
-                disabled: Box::new(move |_theme| crate::widget::button::Style {
+                disabled: Box::new(move |theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(icon_color),
+                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
