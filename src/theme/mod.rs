@@ -115,12 +115,15 @@ pub fn system_dark() -> Theme {
         return Theme::dark();
     };
 
-    let t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
+    let mut t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
         for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
             tracing::error!(?error, "error loading system dark theme");
         }
         theme
     });
+    // `is_dark` is not persisted in cosmic-config, so the loaded palette flag is
+    // unreliable; force it to match the mode we explicitly loaded.
+    t.is_dark = true;
 
     Theme::system(Arc::new(t))
 }
@@ -130,12 +133,15 @@ pub fn system_light() -> Theme {
         return Theme::light();
     };
 
-    let t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
+    let mut t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
         for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
             tracing::error!(?error, "error loading system light theme");
         }
         theme
     });
+    // `is_dark` is not persisted in cosmic-config, so the loaded palette flag is
+    // unreliable; force it to match the mode we explicitly loaded.
+    t.is_dark = false;
 
     Theme::system(Arc::new(t))
 }

@@ -1121,7 +1121,7 @@ impl rule::Catalog for Theme {
             },
             Rule::LightDivider => rule::Style {
                 // icetron dropdown_divider == border (8%), adapts dark/light
-                color: crate::theme::style::ink(self.cosmic().is_dark, 20).into(),
+                color: crate::theme::style::ink(self.theme_type.is_dark(), 20).into(),
                 radius: 0.0.into(),
                 fill_mode: rule::FillMode::Padded(8),
                 snap: true,

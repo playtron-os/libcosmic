@@ -197,7 +197,7 @@ impl Catalog for crate::Theme {
         appearance(self, focused, selected, false, style, move |component| {
             if matches!(style, Button::MenuItem | Button::MenuFolder) {
                 // icetron: transparent bg, text_primary label (adapts dark/light)
-                let t = crate::theme::style::ink(self.cosmic().is_dark, 222);
+                let t = crate::theme::style::ink(self.theme_type.is_dark(), 222);
                 return (Color::TRANSPARENT, Some(t), Some(t));
             }
             let text_color = if matches!(
@@ -222,7 +222,7 @@ impl Catalog for crate::Theme {
         appearance(self, false, false, true, style, |component| {
             if matches!(style, Button::MenuFolder) {
                 // Menu folders have no on_press; match MenuItem idle (text_primary)
-                let t = crate::theme::style::ink(self.cosmic().is_dark, 222);
+                let t = crate::theme::style::ink(self.theme_type.is_dark(), 222);
                 return (Color::TRANSPARENT, Some(t), Some(t));
             }
             let mut background = Color::from(component.base);
@@ -253,7 +253,7 @@ impl Catalog for crate::Theme {
             |component| {
                 if matches!(style, Button::MenuItem | Button::MenuFolder) {
                     // icetron: state_hovered_neutral bg (8%), text_primary (87%)
-                    let dark = self.cosmic().is_dark;
+                    let dark = self.theme_type.is_dark();
                     let t = crate::theme::style::ink(dark, 222);
                     return (crate::theme::style::ink(dark, 20), Some(t), Some(t));
                 }
@@ -280,7 +280,7 @@ impl Catalog for crate::Theme {
         appearance(self, focused, selected, false, style, |component| {
             if matches!(style, Button::MenuItem | Button::MenuFolder) {
                 // icetron: state_pressed_neutral bg (12%), text_primary
-                let dark = self.cosmic().is_dark;
+                let dark = self.theme_type.is_dark();
                 let t = crate::theme::style::ink(dark, 222);
                 return (crate::theme::style::ink(dark, 31), Some(t), Some(t));
             }

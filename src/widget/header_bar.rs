@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 /// Theme-aware header title color: icetron `text_primary` (87%), adapts dark/light.
 fn header_title_style(theme: &crate::Theme) -> iced_widget::text::Style {
     iced_widget::text::Style {
-        color: Some(crate::theme::style::ink(theme.cosmic().is_dark, 222)),
+        color: Some(crate::theme::style::ink(theme.theme_type.is_dark(), 222)),
         ..Default::default()
     }
 }
@@ -861,7 +861,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             iced_widget::container::Style {
                 // icetron border (8%), adapts dark/light
                 background: Some(iced::Background::Color(crate::theme::style::ink(
-                    theme.cosmic().is_dark,
+                    theme.theme_type.is_dark(),
                     20,
                 ))),
                 ..Default::default()
@@ -881,7 +881,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     let cosmic = theme.cosmic();
                     let window_radius = explicit_radius.unwrap_or_else(|| cosmic.radius_window());
 
-                    let dark = cosmic.is_dark;
+                    let dark = theme.theme_type.is_dark();
                     let ink = crate::theme::style::ink(dark, 222);
                     iced_widget::container::Style {
                         icon_color: Some(ink),
@@ -939,18 +939,18 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             crate::theme::Button::Custom {
                 active: Box::new(move |_focused, theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
+                    icon_color: Some(ink(theme.theme_type.is_dark(), 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
                 disabled: Box::new(move |theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
+                    icon_color: Some(ink(theme.theme_type.is_dark(), 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
                 hovered: Box::new(move |_focused, theme| {
-                    let dark = theme.cosmic().is_dark;
+                    let dark = theme.theme_type.is_dark();
                     crate::widget::button::Style {
                         background: Some(iced::Background::Color(ink(dark, 20))),
                         icon_color: Some(ink(dark, 102)),
@@ -959,7 +959,7 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
                     }
                 }),
                 pressed: Box::new(move |_focused, theme| {
-                    let dark = theme.cosmic().is_dark;
+                    let dark = theme.theme_type.is_dark();
                     crate::widget::button::Style {
                         background: Some(iced::Background::Color(ink(dark, 31))),
                         icon_color: Some(ink(dark, 102)),
@@ -980,13 +980,13 @@ impl<'a, Message: Clone + 'static> HeaderBar<'a, Message> {
             crate::theme::Button::Custom {
                 active: Box::new(move |_focused, theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
+                    icon_color: Some(ink(theme.theme_type.is_dark(), 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),
                 disabled: Box::new(move |theme| crate::widget::button::Style {
                     background: None,
-                    icon_color: Some(ink(theme.cosmic().is_dark, 102)),
+                    icon_color: Some(ink(theme.theme_type.is_dark(), 102)),
                     border_radius: radius.into(),
                     ..crate::widget::button::Style::new()
                 }),

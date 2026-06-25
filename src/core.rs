@@ -122,7 +122,11 @@ impl Default for Core {
             scale_factor: 1.0,
             title: HashMap::new(),
             theme_sub_counter: 0,
-            system_theme: crate::theme::active(),
+            // Load from the Mode config (dark/light) rather than the `active()`
+            // THEME global, whose static default is `Dark`. Capturing `active()`
+            // here pins `system_theme` to that stale default before the app's
+            // theme is applied (and the theme-change guards then keep it stale).
+            system_theme: crate::theme::system_preference(),
             system_theme_mode: ThemeMode::config()
                 .map(|c| {
                     ThemeMode::get_entry(&c).unwrap_or_else(|(errors, mode)| {

@@ -70,7 +70,7 @@ impl StyleSheet for Theme {
 
         match style {
             MenuBarStyle::Default => {
-                let dark = cosmic.is_dark;
+                let dark = self.theme_type.is_dark();
                 Appearance {
                     // icetron elevated surface (white / #1e1e1e), adapts dark/light
                     background: crate::theme::style::elevated_surface(dark),
