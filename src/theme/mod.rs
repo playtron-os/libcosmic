@@ -155,16 +155,17 @@ pub fn system_preference() -> Theme {
     let Ok(is_dark) = ThemeMode::is_dark(&mode_config) else {
         return Theme::dark();
     };
-    let mut theme = if is_dark {
-        system_dark()
-    } else {
-        system_light()
-    };
-    // The per-theme `is_dark` flag is not persisted in cosmic-config, so the
-    // loaded theme can't be trusted to report dark/light correctly. Record the
-    // preference we just read from `ThemeMode` so `is_dark()` reflects config.
-    theme.theme_type.prefer_dark(Some(is_dark));
-    theme
+    // Intentionally leave `prefer_dark` unset (`None`). `system_dark()` /
+    // `system_light()` already force the loaded theme's `is_dark` flag to match
+    // the mode they load, so `is_dark()` is reliable without an explicit
+    // preference. Setting `prefer_dark(Some(..))` here would mark this as a
+    // *manual* dark/light selection, and the app-loop guards in `app/cosmic.rs`
+    // (`SystemThemeModeChange` and the xdg-portal `ColorScheme` handler) skip
+    // updates whenever `prefer_dark.is_some()` — so a "match desktop" app would
+    // stop following live `ThemeMode` changes and only restyle on restart.
+    // Explicit overrides belong to callers that really mean it (e.g. an app's
+    // Dark/Light setting calling `prefer_dark(Some(..))` on the returned theme).
+    if is_dark { system_dark() } else { system_light() }
 }
 
 #[must_use]
