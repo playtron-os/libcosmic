@@ -1139,6 +1139,19 @@ impl<T: Application> Cosmic<T> {
                     } else {
                         crate::theme::system_light()
                     };
+
+                    // The xdg-portal `color-scheme` path is the ONLY route a
+                    // portal color-mode change has into an app that follows the
+                    // desktop: unlike the cosmic-config `Theme`/`ThemeMode`
+                    // watchers (`SystemThemeChange`/`SystemThemeModeChange`,
+                    // which both call `system_theme_update`), nothing else
+                    // notifies the app here. Without this the libcosmic chrome
+                    // repaints from the global `THEME` set below while the app's
+                    // own view stays on the previous mode, producing a
+                    // mismatched window (e.g. dark header over a light body).
+                    let cmd = self.app.system_theme_update(&[], new_theme.cosmic());
+
+                    let core = self.app.core_mut();
                     core.system_theme = new_theme.clone();
                     {
                         let mut cosmic_theme = THEME.lock().unwrap();
@@ -1148,6 +1161,8 @@ impl<T: Application> Cosmic<T> {
                             cosmic_theme.set_theme(new_theme.theme_type);
                         }
                     }
+
+                    return cmd;
                 }
             }
             #[cfg(feature = "xdg-portal")]
