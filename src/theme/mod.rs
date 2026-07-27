@@ -110,20 +110,25 @@ pub fn is_high_contrast() -> bool {
 //     })
 // }
 
+// `get_dark`/`get_light` seed from `dark_default()`/`light_default()` rather
+// than `Theme::get_entry`, which always seeds from `Theme::default()` ==
+// `preferred_theme()`. That default is mode-agnostic — on any desktop whose
+// `XDG_CURRENT_DESKTOP` does not contain "gnome" it is `dark_default()` — so
+// loading the *light* config through `get_entry` silently keeps the dark
+// palette for every key absent from disk. With no system-default layer
+// installed at `/usr/share/cosmic/com.system76.CosmicTheme.Light`, that is the
+// entire palette, and light mode renders a dark palette carrying `is_dark =
+// false`: chrome that reads the flag paints white over a body that reads the
+// palette and paints black.
 pub fn system_dark() -> Theme {
     let Ok(helper) = crate::cosmic_theme::Theme::dark_config() else {
         return Theme::dark();
     };
 
-    let mut t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
-        for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
-            tracing::error!(?error, "error loading system dark theme");
-        }
-        theme
-    });
-    // `is_dark` is not persisted in cosmic-config, so the loaded palette flag is
-    // unreliable; force it to match the mode we explicitly loaded.
-    t.is_dark = true;
+    let (errors, t) = crate::cosmic_theme::Theme::get_dark(&helper);
+    for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
+        tracing::error!(?error, "error loading system dark theme");
+    }
 
     Theme::system(Arc::new(t))
 }
@@ -133,15 +138,10 @@ pub fn system_light() -> Theme {
         return Theme::light();
     };
 
-    let mut t = crate::cosmic_theme::Theme::get_entry(&helper).unwrap_or_else(|(errors, theme)| {
-        for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
-            tracing::error!(?error, "error loading system light theme");
-        }
-        theme
-    });
-    // `is_dark` is not persisted in cosmic-config, so the loaded palette flag is
-    // unreliable; force it to match the mode we explicitly loaded.
-    t.is_dark = false;
+    let (errors, t) = crate::cosmic_theme::Theme::get_light(&helper);
+    for error in errors.into_iter().filter(cosmic_config::Error::is_err) {
+        tracing::error!(?error, "error loading system light theme");
+    }
 
     Theme::system(Arc::new(t))
 }

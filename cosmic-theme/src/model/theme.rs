@@ -728,19 +728,64 @@ impl Theme {
 
         let is_dark = self.is_dark;
 
+        // Seed from the builder matching `is_dark`, for the same reason as
+        // `Theme::get_light`/`get_dark`: `ThemeBuilder::get_entry` seeds from
+        // `ThemeBuilder::default()`, whose palette is `DARK_PALETTE`
+        // unconditionally. Loading the light builder through it would rebuild
+        // the theme on a dark palette and flip the whole app dark.
         let mut builder = if is_dark {
             ThemeBuilder::dark_config()
                 .ok()
-                .and_then(|h| ThemeBuilder::get_entry(&h).ok())
+                .map(|h| {
+                    let mut b = ThemeBuilder::dark();
+                    b.update_keys(&h, ThemeBuilder::CONFIG_KEYS);
+                    b
+                })
                 .unwrap_or_else(ThemeBuilder::dark)
         } else {
             ThemeBuilder::light_config()
                 .ok()
-                .and_then(|h| ThemeBuilder::get_entry(&h).ok())
+                .map(|h| {
+                    let mut b = ThemeBuilder::light();
+                    b.update_keys(&h, ThemeBuilder::CONFIG_KEYS);
+                    b
+                })
                 .unwrap_or_else(ThemeBuilder::light)
         };
         builder = builder.accent(adjusted_c);
         builder.build()
+    }
+
+    /// Load `config`, using `fallback` for every key that is absent from disk.
+    ///
+    /// [`CosmicConfigEntry::get_entry`] always seeds from [`Self::default`],
+    /// i.e. [`Self::preferred_theme`], which does not know *which* config is
+    /// being loaded — on a non-GNOME desktop it yields the dark palette even
+    /// for the light theme. Where the caller knows the mode, seed from the
+    /// matching default instead.
+    pub fn get_entry_with_fallback(
+        config: &Config,
+        fallback: Self,
+    ) -> (Vec<cosmic_config::Error>, Self) {
+        let mut theme = fallback;
+        let (errors, _changed) = theme.update_keys(config, Self::CONFIG_KEYS);
+        (errors, theme)
+    }
+
+    /// Load the light theme config, falling back to [`Self::light_default`].
+    pub fn get_light(config: &Config) -> (Vec<cosmic_config::Error>, Self) {
+        let (errors, mut theme) = Self::get_entry_with_fallback(config, Self::light_default());
+        // Invariant: the light theme is light, whatever the config claims.
+        theme.is_dark = false;
+        (errors, theme)
+    }
+
+    /// Load the dark theme config, falling back to [`Self::dark_default`].
+    pub fn get_dark(config: &Config) -> (Vec<cosmic_config::Error>, Self) {
+        let (errors, mut theme) = Self::get_entry_with_fallback(config, Self::dark_default());
+        // Invariant: the dark theme is dark, whatever the config claims.
+        theme.is_dark = true;
+        (errors, theme)
     }
 
     /// choose default color palette based on preferred GTK color scheme
