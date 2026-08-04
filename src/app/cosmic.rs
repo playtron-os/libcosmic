@@ -476,37 +476,63 @@ where
 
                     crate::Action::Cosmic(Action::ToolkitConfig(update.config))
                 }),
-            self.app
-                .core()
-                .watch_config::<cosmic_theme::Theme>(
-                    if if let ThemeType::System { prefer_dark, .. } =
-                        THEME.lock().unwrap().theme_type
-                    {
-                        prefer_dark
-                    } else {
-                        None
-                    }
-                    .unwrap_or_else(|| self.app.core().system_theme_mode.is_dark)
-                    {
+            {
+                let want_dark = if let ThemeType::System { prefer_dark, .. } =
+                    THEME.lock().unwrap().theme_type
+                {
+                    prefer_dark
+                } else {
+                    None
+                }
+                .unwrap_or_else(|| self.app.core().system_theme_mode.is_dark);
+
+                self.app
+                    .core()
+                    .watch_config::<cosmic_theme::Theme>(if want_dark {
                         cosmic_theme::DARK_THEME_ID
                     } else {
                         cosmic_theme::LIGHT_THEME_ID
-                    },
-                )
-                .map(|update| {
-                    for why in update
-                        .errors
-                        .into_iter()
-                        .filter(cosmic_config::Error::is_err)
-                    {
-                        tracing::error!(?why, "cosmic theme config update error");
-                    }
-                    Action::SystemThemeChange(
-                        update.keys,
-                        crate::theme::Theme::system(Arc::new(update.config)),
-                    )
-                })
-                .map(crate::Action::Cosmic),
+                    })
+                    .map(|update| {
+                        for why in update
+                            .errors
+                            .into_iter()
+                            .filter(cosmic_config::Error::is_err)
+                        {
+                            tracing::error!(?why, "cosmic theme config update error");
+                        }
+                        // `update.config` comes from the generic `T::get_entry`,
+                        // which seeds from the mode-agnostic `Theme::default()`
+                        // and so carries the dark palette for keys absent from
+                        // the light config. Re-resolve through the per-mode
+                        // loaders instead of trusting it.
+                        //
+                        // `Subscription::map` requires a non-capturing closure,
+                        // so re-derive the mode from the globals rather than
+                        // closing over the `want_dark` computed above.
+                        let want_dark = if let ThemeType::System { prefer_dark, .. } =
+                            THEME.lock().unwrap().theme_type
+                        {
+                            prefer_dark
+                        } else {
+                            None
+                        }
+                        .unwrap_or_else(|| {
+                            ThemeMode::config()
+                                .ok()
+                                .and_then(|c| ThemeMode::is_dark(&c).ok())
+                                .unwrap_or(true)
+                        });
+
+                        let theme = if want_dark {
+                            crate::theme::system_dark()
+                        } else {
+                            crate::theme::system_light()
+                        };
+                        Action::SystemThemeChange(update.keys, theme)
+                    })
+                    .map(crate::Action::Cosmic)
+            },
             self.app
                 .core()
                 .watch_config::<ThemeMode>(cosmic_theme::THEME_MODE_ID)

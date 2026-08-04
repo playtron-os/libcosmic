@@ -53,6 +53,14 @@ fn impl_cosmic_config_entry_macro(ast: &syn::DeriveInput) -> TokenStream {
         }
     });
 
+    // Every config key, so callers can layer an on-disk config over a chosen
+    // base value instead of the `Default` one that `get_entry` is hardcoded to
+    // seed from.
+    let field_name_list = fields.iter().map(|field| {
+        let field_name = &field.ident;
+        quote! { stringify!(#field_name) }
+    });
+
     let get_each_config_field = fields.iter().map(|field| {
         let field_name = &field.ident;
         let field_type = &field.ty;
@@ -143,6 +151,13 @@ fn impl_cosmic_config_entry_macro(ast: &syn::DeriveInput) -> TokenStream {
         }
 
         impl #name {
+            /// Every config key of this entry, in field declaration order.
+            ///
+            /// Pass to [`CosmicConfigEntry::update_keys`] to layer an on-disk
+            /// config over an explicitly chosen base, which `get_entry` cannot
+            /// do — it always seeds from `Default`.
+            pub const CONFIG_KEYS: &'static [&'static str] = &[#(#field_name_list),*];
+
             #(#setters)*
         }
     };
