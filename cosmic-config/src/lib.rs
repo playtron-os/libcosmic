@@ -481,9 +481,16 @@ impl ConfigGet for Config {
     fn get_system_default<T: DeserializeOwned>(&self, key: &str) -> Result<T, Error> {
         // Load system default
         let default_path = self.default_path(key)?;
-        let data =
-            fs::read_to_string(default_path).map_err(|err| Error::GetKey(key.to_string(), err))?;
-        Ok(ron::from_str(&data)?)
+        match fs::read_to_string(default_path) {
+            Ok(data) => Ok(ron::from_str(&data)?),
+            // Defaults written before a key existed lack it; the previous version's may have it.
+            Err(err) => match &self.previous {
+                Some(previous) if err.kind() == std::io::ErrorKind::NotFound => {
+                    previous.get_system_default(key)
+                }
+                _ => Err(Error::GetKey(key.to_string(), err)),
+            },
+        }
     }
 }
 
@@ -557,4 +564,43 @@ pub struct Update<T> {
     pub errors: Vec<crate::Error>,
     pub keys: Vec<&'static str>,
     pub config: T,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A config whose system defaults are `current`, falling back to `previous`.
+    fn system(current: &Path, previous: &Path) -> Config {
+        Config {
+            system_path: Some(current.to_path_buf()),
+            user_path: None,
+            previous: Some(Box::new(Config {
+                system_path: Some(previous.to_path_buf()),
+                user_path: None,
+                previous: None,
+            })),
+        }
+    }
+
+    // Installed v2 theme defaults can predate a key that the v1 defaults beside them carry.
+    #[test]
+    fn a_key_missing_from_the_system_defaults_comes_from_the_previous_version() {
+        let root = env::temp_dir().join(format!("cosmic-config-test-{}", std::process::id()));
+        let (v1, v2) = (root.join("v1"), root.join("v2"));
+        fs::create_dir_all(&v1).unwrap();
+        fs::create_dir_all(&v2).unwrap();
+        fs::write(v1.join("list_button"), "1").unwrap();
+        fs::write(v1.join("button"), "1").unwrap();
+        fs::write(v2.join("button"), "2").unwrap();
+        let config = system(&v2, &v1);
+
+        assert_eq!(config.get::<u32>("list_button").unwrap(), 1);
+        assert_eq!(config.get::<u32>("button").unwrap(), 2, "v2 still wins");
+        assert!(matches!(
+            config.get::<u32>("unknown"),
+            Err(Error::GetKey(key, _)) if key == "unknown"
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
 }
