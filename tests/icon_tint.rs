@@ -46,6 +46,9 @@ fn only_a_symbolic_file_is_tinted() {
 
     let named = icon::from_name("libcosmic-test-camera-symbolic");
     assert_eq!(named.clone().path(), Some(symbolic));
-    assert!(named.clone().handle().symbolic, "a symbolic icon is not tinted");
+    assert!(
+        named.clone().handle().symbolic,
+        "a symbolic icon is not tinted"
+    );
     assert!(!named.symbolic(false).handle().symbolic);
 }
